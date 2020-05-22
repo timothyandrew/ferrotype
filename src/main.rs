@@ -31,11 +31,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [ ] 1. scan fs to determine local state of the world
     // [x] 2. download metadata from the GP API to determine remote state of the world
     // [x] 2.1 Auth
-    // [ ] 2.2 Download subsequent pages
-    // [ ] 2.3 Refresh auth
+    // [x] 2.2 Download subsequent pages
+    // [x] 2.3 Refresh auth
     // [ ] 3. only download changed files
     // [x] 4. start downloading
-    // [ ] 5. respect API limits
+    // [x] 5. respect API limits
     // [ ] 6. do this once every X hours
     // [ ] 7. Download to a temporary file and then execute a mv to prevent corruption
+    // [ ] 8. Download non-images correctly
+    // [ ] 9. "Deployment"
 }

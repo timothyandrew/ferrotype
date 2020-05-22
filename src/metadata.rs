@@ -106,6 +106,7 @@ async fn fetch_page(
             let response: MetadataResponse = response.json::<MetadataResponse>().await?;
 
             // TODO: Only download missing media items
+            // TODO: Parameter for dl location
             dl::download_media_items(&response.mediaItems, "/tmp/foo").await?;
 
             usage.metadata += 1;
