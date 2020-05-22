@@ -1,7 +1,7 @@
 use reqwest::{Client, Url};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Instant;
-use serde::Deserialize;
 
 use crate::cli;
 
@@ -12,39 +12,42 @@ const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const REDIRECT_URL: &str = "http://example.com";
 
 pub struct Credentials {
-  access_token: String,
-  refresh_token: String,
-  validity: i32,
-  created_at: Instant
+    access_token: String,
+    refresh_token: String,
+    validity: i32,
+    created_at: Instant,
 }
 
 impl Credentials {
-  pub fn get_key(&self) -> &str {
-    &self.access_token
-  }
-
-  pub fn dummy(key: &str) -> Credentials {
-    Credentials {
-      access_token: String::from(key),
-      refresh_token: String::from(""),
-      validity: 0,
-      created_at: Instant::now()
+    pub fn get_key(&self) -> &str {
+        &self.access_token
     }
-  }
+
+    pub fn dummy(key: &str) -> Credentials {
+        Credentials {
+            access_token: String::from(key),
+            refresh_token: String::from(""),
+            validity: 0,
+            created_at: Instant::now(),
+        }
+    }
 }
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
 struct AuthResponse {
-  access_token: String,
-  refresh_token: String,
-  expires_in: i32,
-  scope: String,
-  token_type: String
+    access_token: String,
+    refresh_token: String,
+    expires_in: i32,
+    scope: String,
+    token_type: String,
 }
 
 // Exchange a client id/secret for an access token
-pub async fn authorize(client_id: &str, secret: &str) -> Result<Credentials, Box<dyn std::error::Error>> {
+pub async fn authorize(
+    client_id: &str,
+    secret: &str,
+) -> Result<Credentials, Box<dyn std::error::Error>> {
     let client = Client::new();
 
     let params = vec![
@@ -76,13 +79,24 @@ pub async fn authorize(client_id: &str, secret: &str) -> Result<Credentials, Box
         ("grant_type", "authorization_code"),
     ];
 
+    // TODO: Handle non-200s
     let response = client.post(TOKEN_URL).form(&params).send().await?;
-    let AuthResponse {access_token, refresh_token, expires_in, ..} = response.json::<AuthResponse>().await?;
+    let AuthResponse {
+        access_token,
+        refresh_token,
+        expires_in,
+        ..
+    } = response.json::<AuthResponse>().await?;
 
     // TODO: Remove this
     println!("Got access token: {}", access_token);
 
-    let credentials = Credentials { access_token, refresh_token, validity: expires_in, created_at: Instant::now()  };
+    let credentials = Credentials {
+        access_token,
+        refresh_token,
+        validity: expires_in,
+        created_at: Instant::now(),
+    };
 
     Ok(credentials)
 }

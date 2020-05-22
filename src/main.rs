@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let credentials = match key {
         Some(key) => auth::Credentials::dummy(key),
-        None => auth::authorize(client_id, secret).await?
+        None => auth::authorize(client_id, secret).await?,
     };
 
     metadata::fetch(credentials).await?;
