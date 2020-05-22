@@ -1,6 +1,7 @@
 //! Download, examine, and store _metadata_ about the media we're attempting to fetch.
 
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 
 use crate::auth::Credentials;
 use chrono::{DateTime, Utc};
@@ -24,6 +25,7 @@ struct UsageAgainstQuota {
 struct Photo {}
 
 #[derive(Deserialize, Debug)]
+#[warn(non_camel_case_types)]
 struct Video {}
 
 #[derive(Deserialize, Debug)]
@@ -138,15 +140,20 @@ async fn fetch_page(credentials: &Credentials, pageToken: &str, usage: &mut Usag
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
     let mut pageToken = String::new();
     let mut counter = 1;
+    let mut credentials = credentials;
 
     // TODO: replace with a ::new function
     let mut usage = UsageAgainstQuota { download: 0, metadata: 0 };
-
 
     loop {
         if is_over_quota(&usage) {
             println!("Exiting early; over quota! Try again after midnight Pacific Time.");
             return Ok(())
+        }
+
+        if credentials.is_token_expiry_imminent() {
+            println!("Token expiry is imminent (less than five minutes away); attempting to refresh token.");
+            credentials = credentials.refresh().await?;
         }
 
         println!("Downloading page #{}", counter);

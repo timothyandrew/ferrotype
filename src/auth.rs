@@ -14,8 +14,10 @@ const REDIRECT_URL: &str = "http://example.com";
 pub struct Credentials {
     access_token: String,
     refresh_token: String,
-    validity: i32,
+    validity: u64,
     created_at: Instant,
+    client_id: String,
+    client_secret: String
 }
 
 impl Credentials {
@@ -29,7 +31,47 @@ impl Credentials {
             refresh_token: String::from(""),
             validity: 0,
             created_at: Instant::now(),
+            client_id: String::from(""),
+            client_secret: String::from("")
         }
+    }
+
+    pub fn is_token_expiry_imminent(&self) -> bool {
+        // TODO: Use Duration directly for this
+        let buffer = 300; // seconds
+        (Instant::now().duration_since(self.created_at).as_secs() + buffer) >= self.validity
+    }
+
+    pub async fn refresh(&self) -> Result<Credentials, Box<dyn std::error::Error>> {
+        let client = Client::new();
+
+        let params = vec![
+            ("client_id", &self.client_id[..]),
+            ("client_secret", &self.client_secret[..]),
+            ("refresh_token", &self.refresh_token[..]),
+            ("grant_type", "refresh_token"),
+        ];
+
+        // TODO: Handle non-200s
+        let response = client.post(TOKEN_URL).form(&params).send().await?;
+        let AuthResponse {
+            access_token,
+            expires_in,
+            ..
+        } = response.json::<AuthResponse>().await?;
+
+        println!("Refreshed to access token: {}", access_token);
+
+        let credentials = Credentials {
+            access_token,
+            refresh_token: self.refresh_token.clone(),
+            validity: expires_in,
+            created_at: Instant::now(),
+            client_id: self.client_id.clone(),
+            client_secret: self.client_secret.clone()
+        };
+
+        Ok(credentials)
     }
 }
 
@@ -38,7 +80,7 @@ impl Credentials {
 struct AuthResponse {
     access_token: String,
     refresh_token: String,
-    expires_in: i32,
+    expires_in: u64,
     scope: String,
     token_type: String,
 }
@@ -96,6 +138,8 @@ pub async fn authorize(
         refresh_token,
         validity: expires_in,
         created_at: Instant::now(),
+        client_id: client_id.to_string(),
+        client_secret: secret.to_string()
     };
 
     Ok(credentials)
