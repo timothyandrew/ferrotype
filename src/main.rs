@@ -1,9 +1,12 @@
-use reqwest::{Client,Url};
-use tokio::prelude::*;
-use std::{process,env};
+use reqwest::{Client, Url};
 use std::collections::HashMap;
+use std::{env, process};
+use tokio::prelude::*;
 
-const BASE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
+mod cli;
+
+const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
+const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 
 // TODO: Use a `localhost` server to respond to this and display the `code`
 const REDIRECT_URL: &str = "http://example.com";
@@ -16,17 +19,33 @@ async fn authorize(client_id: &str, secret: &str) -> Result<String, Box<dyn std:
         ("client_id", client_id),
         ("redirect_uri", REDIRECT_URL),
         ("response_type", "code"),
-        ("scope", "https://www.googleapis.com/auth/photoslibrary.readonly"),
+        (
+            "scope",
+            "https://www.googleapis.com/auth/photoslibrary.readonly",
+        ),
         ("access_type", "offline"),
         ("state", "random"), // TODO: Randomly-generate a `state` parameter
-        ("include_granted_scopes", "false"),
-        // ("login_hint", "")
+        ("include_granted_scopes", "true"),
+        ("prompt", "consent")
     ];
 
-    let url = Url::parse_with_params(BASE_URL, &params)?;
+    let url = Url::parse_with_params(AUTH_URL, &params)?;
 
     println!("Open this URL in your browser:");
     println!("{}", url);
+
+    let token = cli::read_cli_input("And enter the access token below:");
+
+    let params = vec![
+        ("client_id", client_id),
+        ("redirect_uri", REDIRECT_URL),
+        ("client_secret", secret),
+        ("code", token.as_ref()),
+        ("grant_type", "authorization_code"),
+    ];
+
+    let foo = client.post(TOKEN_URL).form(&params).send().await?;
+    println!("{}", foo.text().await?);
 
     return Ok(String::from("foo"));
 }
@@ -40,8 +59,12 @@ fn fail(message: &str) {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let env: HashMap<String, String> = env::vars().collect();
 
-    let client_id = env.get("FERROTYPE_CLIENT_ID").expect("Didn't get a FERROTYPE_CLIENT_ID");
-    let secret = env.get("FERROTYPE_SECRET").expect("Didn't get a FERROTYPE_SECRET");
+    let client_id = env
+        .get("FERROTYPE_CLIENT_ID")
+        .expect("Didn't get a FERROTYPE_CLIENT_ID");
+    let secret = env
+        .get("FERROTYPE_SECRET")
+        .expect("Didn't get a FERROTYPE_SECRET");
 
     authorize(client_id, secret).await;
 
