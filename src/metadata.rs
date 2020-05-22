@@ -11,10 +11,10 @@ use crate::dl;
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
 
 #[derive(Deserialize, Debug)]
-struct Photo;
+struct Photo {}
 
 #[derive(Deserialize, Debug)]
-struct Video;
+struct Video {}
 
 #[derive(Deserialize, Debug)]
 enum MediaItemType {
@@ -29,7 +29,7 @@ struct MediaItemMetadata {
 }
 
 #[derive(Deserialize, Debug)]
-struct MediaItem {
+pub struct MediaItem {
     id: String,
     baseUrl: String,
     mimeType: String,
@@ -42,6 +42,20 @@ struct MetadataResponse {
     nextPageToken: String,
 }
 
+impl MediaItem {
+    pub fn url(&self) -> &str {
+        &self.baseUrl
+    }
+
+    pub fn filename(&self) -> String {
+        match self.mimeType.as_ref() {
+            "image/jpeg" => format!("{}.jpg", self.id),
+            "image/png" => format!("{}.png", self.id),
+            _ => self.id.to_string()
+        }
+    }
+}
+
 /// Fetch all metadata
 ///
 /// ## Limits
@@ -49,7 +63,7 @@ struct MetadataResponse {
 /// - Pagination uses a continuation token, so this can't be parallelized.
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
-    let params = vec![("pageSize", "1"), ("pageToken", "")];
+    let params = vec![("pageSize", "50"), ("pageToken", "")];
     let url = Url::parse_with_params(LIST_URL, &params)?;
 
     let request = client
@@ -60,16 +74,8 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
     match response.status() {
         StatusCode::OK => {
             let response: MetadataResponse = response.json::<MetadataResponse>().await?;
-
-            let urls: Vec<_> = response.mediaItems.iter().map(|item| {
-                // TODO: This only works for photos; handle videos, etc.
-                // This is the weird query param syntax that google requires; is this even to-spec?
-                let url = format!("{}=d", item.baseUrl);
-                let url = Url::parse(&url).unwrap();
-                url
-            }).collect();
-
-            dl::download_urls(&urls, "/tmp").await?;
+            // TODO: Only download missing media items
+            dl::download_media_items(&response.mediaItems, "/tmp").await?;
         }
         // TODO: Do something more graceful here
         _ => panic!("non 200!"),
