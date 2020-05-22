@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::{env, process};
+use std::env;
 
 mod auth;
 mod cli;
-mod metadata;
 mod dl;
+mod metadata;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

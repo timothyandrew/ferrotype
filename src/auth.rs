@@ -1,6 +1,6 @@
 use reqwest::{Client, Url};
 use serde::Deserialize;
-use std::collections::HashMap;
+
 use std::time::Instant;
 
 use crate::cli;

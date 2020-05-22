@@ -3,9 +3,9 @@
 #![allow(non_snake_case)]
 
 use crate::auth::Credentials;
+use chrono::{DateTime, Utc};
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
-use chrono::{DateTime,Utc};
 
 use crate::dl;
 
@@ -26,7 +26,7 @@ enum MediaItemType {
 
 #[derive(Deserialize, Debug)]
 struct MediaItemMetadata {
-    creationTime: DateTime::<Utc>,
+    creationTime: DateTime<Utc>,
     #[serde(flatten)]
     mediaType: MediaItemType,
 }
@@ -46,7 +46,7 @@ struct MetadataResponse {
 }
 
 impl MediaItem {
-    pub fn created_at(&self) -> &DateTime::<Utc> {
+    pub fn created_at(&self) -> &DateTime<Utc> {
         &self.mediaMetadata.creationTime
     }
 
@@ -59,7 +59,7 @@ impl MediaItem {
             "image/jpeg" => format!("{}.jpg", self.id),
             "image/png" => format!("{}.png", self.id),
             "video/mp4" => format!("{}.mp4", self.id),
-            _ => self.id.to_string()
+            _ => self.id.to_string(),
         }
     }
 }
