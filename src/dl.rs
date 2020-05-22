@@ -32,7 +32,12 @@ async fn download_item(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // TODO: This is photo-specific; handle videos!
     let url = format!("{}=d", item.url());
+
+    // `unwrap` here is _probably_ valid because not receving a valid URL here
+    // could be considered a stop-the-world error, but is there a better way to
+    // handle this?
     let url = Url::parse(url.as_ref()).unwrap();
+
     let response = client.get(url.to_owned()).send().await?;
 
     // TODO: Use `bytes_stream` instead

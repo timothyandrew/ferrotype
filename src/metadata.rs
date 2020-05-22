@@ -10,7 +10,15 @@ use serde::Deserialize;
 use crate::dl;
 
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
-const PAGE_SIZE: &str = "100";
+const PAGE_SIZE: usize = 100;
+const METADATA_QUOTA: usize = 9000;
+const DOWNLOAD_QUOTA: usize = 72000;
+
+#[derive(Debug)]
+struct UsageAgainstQuota {
+    metadata: usize,
+    download: usize
+}
 
 #[derive(Deserialize, Debug)]
 struct Photo {}
@@ -69,9 +77,14 @@ enum FetchResult {
     NoMorePagesExist
 }
 
-async fn fetch_page(credentials: &Credentials, pageToken: &str) -> Result<FetchResult, Box<dyn std::error::Error>> {
+fn is_over_quota(usage: &UsageAgainstQuota) -> bool {
+    println!("Current usage against quota: {:?}", usage);
+    (usage.download + PAGE_SIZE) >= DOWNLOAD_QUOTA || (usage.metadata + 1) >= METADATA_QUOTA
+}
+
+async fn fetch_page(credentials: &Credentials, pageToken: &str, usage: &mut UsageAgainstQuota) -> Result<FetchResult, Box<dyn std::error::Error>> {
     let client = Client::new();
-    let params = vec![("pageSize", PAGE_SIZE), ("pageToken", pageToken)];
+    let params = vec![("pageSize", PAGE_SIZE.to_string()), ("pageToken", pageToken.to_string())];
     let url = Url::parse_with_params(LIST_URL, &params)?;
 
     let request = client
@@ -86,6 +99,9 @@ async fn fetch_page(credentials: &Credentials, pageToken: &str) -> Result<FetchR
             // TODO: Only download missing media items
             dl::download_media_items(&response.mediaItems, "/tmp/foo").await?;
 
+            usage.metadata += 1;
+            usage.download += response.mediaItems.len();
+
             let result = if response.nextPageToken.is_empty() {
                 FetchResult::NoMorePagesExist
             } else {
@@ -93,9 +109,22 @@ async fn fetch_page(credentials: &Credentials, pageToken: &str) -> Result<FetchR
             };
 
             Ok(result)
+        },
+        StatusCode::UNAUTHORIZED => {
+            // We shouldn't ever hit this line if the refresh token flow
+            // is working as expected.
+            panic!("Authorization failed!")
+
+        },
+        StatusCode::TOO_MANY_REQUESTS => {
+            panic!("We've hit the rate limit!")
+        },
+        status => {
+            // TODO: Implement retry logic:
+            // - https://developers.google.com/photos/library/guides/api-limits-quotas
+            // - https://developers.google.com/photos/library/guides/best-practices
+            panic!("Failed to fetch metadata! Failed with status: {}", status);
         }
-        // TODO: Do something more graceful here
-        _ => panic!("non 200!"),
     }
 }
 
@@ -110,11 +139,20 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
     let mut pageToken = String::new();
     let mut counter = 1;
 
+    // TODO: replace with a ::new function
+    let mut usage = UsageAgainstQuota { download: 0, metadata: 0 };
+
+
     loop {
+        if is_over_quota(&usage) {
+            println!("Exiting early; over quota! Try again after midnight Pacific Time.");
+            return Ok(())
+        }
+
         println!("Downloading page #{}", counter);
         counter += 1;
 
-        match fetch_page(&credentials, &pageToken).await? {
+        match fetch_page(&credentials, &pageToken, &mut usage).await? {
             FetchResult::MorePagesExist(next) => pageToken = next,
             FetchResult::NoMorePagesExist => {
                 println!("All done!");
