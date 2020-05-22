@@ -5,10 +5,12 @@
 use crate::auth::Credentials;
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
+use chrono::{DateTime,Utc};
 
 use crate::dl;
 
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
+const PAGE_SIZE: &str = "100";
 
 #[derive(Deserialize, Debug)]
 struct Photo {}
@@ -24,6 +26,7 @@ enum MediaItemType {
 
 #[derive(Deserialize, Debug)]
 struct MediaItemMetadata {
+    creationTime: DateTime::<Utc>,
     #[serde(flatten)]
     mediaType: MediaItemType,
 }
@@ -43,6 +46,10 @@ struct MetadataResponse {
 }
 
 impl MediaItem {
+    pub fn created_at(&self) -> &DateTime::<Utc> {
+        &self.mediaMetadata.creationTime
+    }
+
     pub fn url(&self) -> &str {
         &self.baseUrl
     }
@@ -51,19 +58,22 @@ impl MediaItem {
         match self.mimeType.as_ref() {
             "image/jpeg" => format!("{}.jpg", self.id),
             "image/png" => format!("{}.png", self.id),
+            "video/mp4" => format!("{}.mp4", self.id),
             _ => self.id.to_string()
         }
     }
 }
 
-/// Fetch all metadata
+/// Fetch all metadata. By design, this module is very specific to this use-case, and
+/// isn't structured as a generic downloader library. It accepts a `prefix`, and downloads
+/// to a `YYYY/YYYY-MM-DD/filename` structure under it.
 ///
 /// ## Limits
 /// - The API allows 100 metadata items to be fetched per request.
 /// - Pagination uses a continuation token, so this can't be parallelized.
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
-    let params = vec![("pageSize", "50"), ("pageToken", "")];
+    let params = vec![("pageSize", PAGE_SIZE), ("pageToken", "")];
     let url = Url::parse_with_params(LIST_URL, &params)?;
 
     let request = client
@@ -75,7 +85,7 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
         StatusCode::OK => {
             let response: MetadataResponse = response.json::<MetadataResponse>().await?;
             // TODO: Only download missing media items
-            dl::download_media_items(&response.mediaItems, "/tmp").await?;
+            dl::download_media_items(&response.mediaItems, "/tmp/foo").await?;
         }
         // TODO: Do something more graceful here
         _ => panic!("non 200!"),
