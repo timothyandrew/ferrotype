@@ -18,7 +18,7 @@ const DOWNLOAD_QUOTA: usize = 72000;
 #[derive(Debug)]
 struct UsageAgainstQuota {
     metadata: usize,
-    download: usize
+    download: usize,
 }
 
 #[derive(Deserialize, Debug)]
@@ -76,7 +76,7 @@ impl MediaItem {
 
 enum FetchResult {
     MorePagesExist(String),
-    NoMorePagesExist
+    NoMorePagesExist,
 }
 
 fn is_over_quota(usage: &UsageAgainstQuota) -> bool {
@@ -84,9 +84,16 @@ fn is_over_quota(usage: &UsageAgainstQuota) -> bool {
     (usage.download + PAGE_SIZE) >= DOWNLOAD_QUOTA || (usage.metadata + 1) >= METADATA_QUOTA
 }
 
-async fn fetch_page(credentials: &Credentials, pageToken: &str, usage: &mut UsageAgainstQuota) -> Result<FetchResult, Box<dyn std::error::Error>> {
+async fn fetch_page(
+    credentials: &Credentials,
+    pageToken: &str,
+    usage: &mut UsageAgainstQuota,
+) -> Result<FetchResult, Box<dyn std::error::Error>> {
     let client = Client::new();
-    let params = vec![("pageSize", PAGE_SIZE.to_string()), ("pageToken", pageToken.to_string())];
+    let params = vec![
+        ("pageSize", PAGE_SIZE.to_string()),
+        ("pageToken", pageToken.to_string()),
+    ];
     let url = Url::parse_with_params(LIST_URL, &params)?;
 
     let request = client
@@ -111,16 +118,13 @@ async fn fetch_page(credentials: &Credentials, pageToken: &str, usage: &mut Usag
             };
 
             Ok(result)
-        },
+        }
         StatusCode::UNAUTHORIZED => {
             // We shouldn't ever hit this line if the refresh token flow
             // is working as expected.
             panic!("Authorization failed!")
-
-        },
-        StatusCode::TOO_MANY_REQUESTS => {
-            panic!("We've hit the rate limit!")
-        },
+        }
+        StatusCode::TOO_MANY_REQUESTS => panic!("We've hit the rate limit!"),
         status => {
             // TODO: Implement retry logic:
             // - https://developers.google.com/photos/library/guides/api-limits-quotas
@@ -143,12 +147,15 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
     let mut credentials = credentials;
 
     // TODO: replace with a ::new function
-    let mut usage = UsageAgainstQuota { download: 0, metadata: 0 };
+    let mut usage = UsageAgainstQuota {
+        download: 0,
+        metadata: 0,
+    };
 
     loop {
         if is_over_quota(&usage) {
             println!("Exiting early; over quota! Try again after midnight Pacific Time.");
-            return Ok(())
+            return Ok(());
         }
 
         if credentials.is_token_expiry_imminent() {
@@ -163,7 +170,7 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
             FetchResult::MorePagesExist(next) => pageToken = next,
             FetchResult::NoMorePagesExist => {
                 println!("All done!");
-                return Ok(())
+                return Ok(());
             }
         }
     }

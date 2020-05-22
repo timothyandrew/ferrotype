@@ -17,7 +17,7 @@ pub struct Credentials {
     validity: u64,
     created_at: Instant,
     client_id: String,
-    client_secret: String
+    client_secret: String,
 }
 
 impl Credentials {
@@ -32,7 +32,7 @@ impl Credentials {
             validity: 0,
             created_at: Instant::now(),
             client_id: String::from(""),
-            client_secret: String::from("")
+            client_secret: String::from(""),
         }
     }
 
@@ -68,7 +68,7 @@ impl Credentials {
             validity: expires_in,
             created_at: Instant::now(),
             client_id: self.client_id.clone(),
-            client_secret: self.client_secret.clone()
+            client_secret: self.client_secret.clone(),
         };
 
         Ok(credentials)
@@ -139,7 +139,7 @@ pub async fn authorize(
         validity: expires_in,
         created_at: Instant::now(),
         client_id: client_id.to_string(),
-        client_secret: secret.to_string()
+        client_secret: secret.to_string(),
     };
 
     Ok(credentials)
