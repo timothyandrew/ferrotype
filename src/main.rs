@@ -40,4 +40,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [ ] 7. Download to a temporary file and then execute a mv to prevent corruption
     // [ ] 8. Download non-images correctly
     // [ ] 9. "Deployment"
+    // [ ] 10. Deployment on Docker
 }

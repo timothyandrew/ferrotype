@@ -107,7 +107,7 @@ async fn fetch_page(
 
             // TODO: Only download missing media items
             // TODO: Parameter for dl location
-            dl::download_media_items(&response.mediaItems, "/downloads").await?;
+            dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
 
             usage.metadata += 1;
             usage.download += response.mediaItems.len();

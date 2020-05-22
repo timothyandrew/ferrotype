@@ -2,5 +2,9 @@ version: '3'
 services:
   ferrotype:
     build: .
+    environment:
+      - FERROTYPE_CLIENT_ID
+      - FERROTYPE_SECRET
+      - FERROTYPE_KEY
     volumes: 
-      - /tmp/foo:/downloads
+      - /mnt/z/ferrotype:/downloads
