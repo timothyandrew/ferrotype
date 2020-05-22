@@ -15,7 +15,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("FERROTYPE_SECRET")
         .expect("Didn't get a FERROTYPE_SECRET");
 
-    auth::authorize(client_id, secret).await?;
+    let key = env.get("FERROTYPE_KEY");
+
+    let credentials = match key {
+        Some(key) => auth::Credentials::dummy(key),
+        None => auth::authorize(client_id, secret).await?
+    };
+
+    metadata::fetch(credentials).await?;
 
     Ok(())
 
