@@ -1,8 +1,12 @@
 //! Download, examine, and store _metadata_ about the media we're attempting to fetch.
 
+#![allow(non_snake_case)]
+
 use crate::auth::Credentials;
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
+
+use crate::dl;
 
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
 
@@ -45,9 +49,7 @@ struct MetadataResponse {
 /// - Pagination uses a continuation token, so this can't be parallelized.
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
-
     let params = vec![("pageSize", "1"), ("pageToken", "")];
-
     let url = Url::parse_with_params(LIST_URL, &params)?;
 
     let request = client
@@ -57,7 +59,17 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
 
     match response.status() {
         StatusCode::OK => {
-            println!("{:?}", response.json::<MetadataResponse>().await?);
+            let response: MetadataResponse = response.json::<MetadataResponse>().await?;
+
+            let urls: Vec<_> = response.mediaItems.iter().map(|item| {
+                // TODO: This only works for photos; handle videos, etc.
+                // This is the weird query param syntax that google requires; is this even to-spec?
+                let url = format!("{}=d", item.baseUrl);
+                let url = Url::parse(&url).unwrap();
+                url
+            }).collect();
+
+            dl::download_urls(&urls, "/tmp").await?;
         }
         // TODO: Do something more graceful here
         _ => panic!("non 200!"),

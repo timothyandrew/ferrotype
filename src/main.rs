@@ -4,6 +4,7 @@ use std::{env, process};
 mod auth;
 mod cli;
 mod metadata;
+mod dl;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
