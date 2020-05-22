@@ -64,16 +64,14 @@ impl MediaItem {
     }
 }
 
-/// Fetch all metadata. By design, this module is very specific to this use-case, and
-/// isn't structured as a generic downloader library. It accepts a `prefix`, and downloads
-/// to a `YYYY/YYYY-MM-DD/filename` structure under it.
-///
-/// ## Limits
-/// - The API allows 100 metadata items to be fetched per request.
-/// - Pagination uses a continuation token, so this can't be parallelized.
-pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
+enum FetchResult {
+    MorePagesExist(String),
+    NoMorePagesExist
+}
+
+async fn fetch_page(credentials: &Credentials, pageToken: &str) -> Result<FetchResult, Box<dyn std::error::Error>> {
     let client = Client::new();
-    let params = vec![("pageSize", PAGE_SIZE), ("pageToken", "")];
+    let params = vec![("pageSize", PAGE_SIZE), ("pageToken", pageToken)];
     let url = Url::parse_with_params(LIST_URL, &params)?;
 
     let request = client
@@ -84,12 +82,44 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
     match response.status() {
         StatusCode::OK => {
             let response: MetadataResponse = response.json::<MetadataResponse>().await?;
+
             // TODO: Only download missing media items
             dl::download_media_items(&response.mediaItems, "/tmp/foo").await?;
+
+            let result = if response.nextPageToken.is_empty() {
+                FetchResult::NoMorePagesExist
+            } else {
+                FetchResult::MorePagesExist(response.nextPageToken)
+            };
+
+            Ok(result)
         }
         // TODO: Do something more graceful here
         _ => panic!("non 200!"),
     }
+}
 
-    Ok(())
+/// Fetch all metadata. By design, this module is very specific to this use-case, and
+/// isn't structured as a generic downloader library. It accepts a `prefix`, and downloads
+/// to a `YYYY/YYYY-MM-DD/filename` structure under it.
+///
+/// ## Limits
+/// - The API allows 100 metadata items to be fetched per request.
+/// - Pagination uses a continuation token, so this can't be parallelized.
+pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
+    let mut pageToken = String::new();
+    let mut counter = 1;
+
+    loop {
+        println!("Downloading page #{}", counter);
+        counter += 1;
+
+        match fetch_page(&credentials, &pageToken).await? {
+            FetchResult::MorePagesExist(next) => pageToken = next,
+            FetchResult::NoMorePagesExist => {
+                println!("All done!");
+                return Ok(())
+            }
+        }
+    }
 }
