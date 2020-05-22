@@ -1,0 +1,6 @@
+version: '3'
+services:
+  ferrotype:
+    build: .
+    volumes: 
+      - /tmp/foo:/downloads
