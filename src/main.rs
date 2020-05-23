@@ -39,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [ ] 6. do this once every X hours
     // [ ] 7. Download to a temporary file and then execute a mv to prevent corruption
     // [ ] 8. Download non-images correctly
-    // [ ] 9. "Deployment"
+    // [x] 9. "Deployment"
     // [ ] 10. Deployment on Docker
+    // [ ] 11. Log levels + timestamps
 }
