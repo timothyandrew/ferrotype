@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 
+// TODO: Move into `lib.rs`?
 mod auth;
 mod cli;
 mod dl;
@@ -52,6 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 12. Init with a refresh token
     // [ ] 13. A lot more debug logging and/or tick metrics
     // [ ] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
-    // [ ] 15. Fetch live quota information from Google
-
+    // [ ] 15. Don't track quota information at all; wait until the first 429 and then panic/stop instead
+    // [ ] 15.1 Log metrics for a given metadata run, though: how many files were skipped, how many errors, how many downloads, etc.
 }
