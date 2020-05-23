@@ -52,4 +52,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 12. Init with a refresh token
     // [ ] 13. A lot more debug logging and/or tick metrics
     // [ ] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
+    // [ ] 15. Fetch live quota information from Google
+
 }

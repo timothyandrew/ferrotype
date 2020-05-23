@@ -29,13 +29,26 @@ async fn create_dirs(items: &[MediaItem], prefix: &Path) -> Result<(), Box<dyn s
 async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let response = client.get(url.to_owned()).send().await?;
 
-    if response.status() == StatusCode::OK {
-        // TODO: Use `bytes_stream` instead
-        let response = response.bytes().await?;
-        let response: &[u8] = response.as_ref();
+    // TODO: Abstract away this duplication
+    match response.status() {
+        StatusCode::OK => {
+            // TODO: Use `bytes_stream` instead
+            let response = response.bytes().await?;
+            let response: &[u8] = response.as_ref();
 
-        let mut file = File::create(filename).await?;
-        file.write_all(response).await?;
+            let mut file = File::create(filename).await?;
+            file.write_all(response).await?;
+        },
+        // We shouldn't ever hit this line if the refresh token flow is working as expected.
+        StatusCode::UNAUTHORIZED => panic!("Authorization failed!"),
+        StatusCode::TOO_MANY_REQUESTS => panic!("We've hit the rate limit!"),
+        _ => {
+            // TODO: Implement retry logic:
+            // - https://developers.google.com/photos/library/guides/api-limits-quotas
+            // - https://developers.google.com/photos/library/guides/best-practices
+
+            // Do nothing for now, assuming that this will resolve itself in a future run.
+        }
     }
 
     Ok(())
