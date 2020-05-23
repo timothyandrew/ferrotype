@@ -60,16 +60,14 @@ impl MediaItem {
         &self.mediaMetadata.creationTime
     }
 
-    pub fn url(&self) -> &str {
-        &self.baseUrl
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
-    pub fn filename(&self) -> String {
-        match self.mimeType.as_ref() {
-            "image/jpeg" => format!("{}.jpg", self.id),
-            "image/png" => format!("{}.png", self.id),
-            "video/mp4" => format!("{}.mp4", self.id),
-            _ => self.id.to_string(),
+    pub fn download_urls(&self) -> Vec<String> {
+        match self.mediaMetadata.mediaType {
+            MediaItemType::photo(_) => vec![format!("{}=d", self.baseUrl), format!("{}=dv", self.baseUrl)],
+            MediaItemType::video(_) => vec![format!("{}=dv", self.baseUrl)],
         }
     }
 }
@@ -107,10 +105,10 @@ async fn fetch_page(
 
             // TODO: Only download missing media items
             // TODO: Parameter for dl location
-            dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
+            let count = dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
 
             usage.metadata += 1;
-            usage.download += response.mediaItems.len();
+            usage.download += count;
 
             let result = if response.nextPageToken.is_empty() {
                 FetchResult::NoMorePagesExist

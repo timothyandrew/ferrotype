@@ -65,7 +65,7 @@ impl Credentials {
             ..
         } = response.json::<RefreshResponse>().await?;
 
-        println!("Refreshed authorization!");
+        println!("Refreshed authorization with token: {}", access_token);
 
         let credentials = Credentials {
             access_token,

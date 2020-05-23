@@ -4,7 +4,8 @@ use reqwest::{Client, Url};
 
 use futures::future::join_all;
 use std::path::{Path, PathBuf};
-use tokio::fs::{create_dir_all, File};
+use tokio::fs::{create_dir_all, File, metadata};
+use reqwest::StatusCode;
 use tokio::io::AsyncWriteExt;
 
 use crate::metadata::MediaItem;
@@ -25,36 +26,61 @@ async fn create_dirs(items: &[MediaItem], prefix: &Path) -> Result<(), Box<dyn s
     Ok(())
 }
 
-async fn download_item(
-    item: &MediaItem,
-    client: &Client,
-    prefix: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: This is photo-specific; handle videos!
-    let url = format!("{}=d", item.url());
-
-    // `unwrap` here is _probably_ valid because not receving a valid URL here
-    // could be considered a stop-the-world error, but is there a better way to
-    // handle this?
-    let url = Url::parse(url.as_ref()).unwrap();
-
+async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let response = client.get(url.to_owned()).send().await?;
 
-    // TODO: Use `bytes_stream` instead
-    let response = response.bytes().await?;
-    let response: &[u8] = response.as_ref();
+    if response.status() == StatusCode::OK {
+        // TODO: Use `bytes_stream` instead
+        let response = response.bytes().await?;
+        let response: &[u8] = response.as_ref();
 
-    let mut file = File::create(item_path(item, prefix).join(item.filename())).await?;
-    file.write_all(response).await?;
+        let mut file = File::create(filename).await?;
+        file.write_all(response).await?;
+    }
 
     Ok(())
 }
 
+// Download the file(s) underlying a given MediaItem.
+// For videos and regular photos, a media item translates to a single file,
+// but this is untrue for motion photos, which are backed by two files.
+async fn download_item(
+    item: &MediaItem,
+    client: &Client,
+    prefix: &Path,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    // `unwrap` here is _probably_ valid because not receving a valid URL here
+    // could be considered a stop-the-world error, but is there a better way to
+    // handle this?
+    let urls = item.download_urls();
+    let mut download_count = 0;
+
+    for url in &urls {
+        let url = Url::parse(&url).unwrap();
+        let filename = if url.to_string().contains("=dv") {
+            format!("{}.mp4", item.id())
+        } else {
+            format!("{}.jpg", item.id())
+        };
+        let path = item_path(item, prefix).join(filename);
+
+        // Do nothing if file already exists
+        // This assumes that a prior download of this file did _not_ result in corruption.
+        if metadata(&path).await.is_err() {
+            download_file(&url, client, &path).await?;
+            download_count += 1;
+        }
+    }
+
+    Ok(download_count)
+}
+
 /// Download (possibly in parallel) all media items passed in, and persist to the `prefix` directory.
+/// Returns the number of downloads attempted.
 pub async fn download_media_items(
     items: &[MediaItem],
     prefix: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<usize, Box<dyn std::error::Error>> {
     let client = Client::new();
     let prefix = Path::new(prefix);
 
@@ -65,7 +91,8 @@ pub async fn download_media_items(
         .map(|item| download_item(item, &client, prefix))
         .collect();
 
-    join_all(futures).await;
+    let results = join_all(futures).await;
+    let count: usize = results.iter().flatten().sum();
 
-    Ok(())
+    Ok(count)
 }

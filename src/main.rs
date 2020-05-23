@@ -5,6 +5,7 @@ mod auth;
 mod cli;
 mod dl;
 mod metadata;
+mod api;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,14 +37,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 2.1 Auth
     // [x] 2.2 Download subsequent pages
     // [x] 2.3 Refresh auth
-    // [ ] 3. only download changed files
+    // [x] 3. only download changed files
     // [x] 4. start downloading
     // [x] 5. respect API limits
     // [ ] 6. do this once every X hours
     // [ ] 7. Download to a temporary file and then execute a mv to prevent corruption
-    // [ ] 8. Download non-images correctly
+    // [x] 8. Download non-images correctly
+    // [x] 8.1 Any photo could be a motion photo; try with `dv`
+    // [ ] 8.2 Detect mime type dynamically to deal with motion photo weirdness
+    // [x] 8.3 Update quotas
     // [x] 9. "Deployment"
     // [ ] 10. Deployment on Docker
     // [ ] 11. Log levels + timestamps
     // [x] 12. Init with a refresh token
+    // [ ] 13. A lot more debug logging and/or tick metrics
+    // [ ] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
 }
