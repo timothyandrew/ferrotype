@@ -11,6 +11,7 @@ const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 // TODO: Use a `localhost` server to respond to this and display the `code`
 const REDIRECT_URL: &str = "http://example.com";
 
+#[derive(Debug)]
 pub struct Credentials {
     access_token: String,
     refresh_token: String,
@@ -25,14 +26,18 @@ impl Credentials {
         &self.access_token
     }
 
-    pub fn dummy(key: &str) -> Credentials {
+
+    /// Instantiate a new `Credentials` instance with previously-received refresh token.
+    /// This instance isn't usable until `refresh` is called on it (to exchange the refresh
+    /// token for an access token).
+    pub fn with_refresh_token(refresh_token: &str, client_id: &str, secret: &str) -> Credentials {
         Credentials {
-            access_token: String::from(key),
-            refresh_token: String::from(""),
+            access_token: String::new(),
+            refresh_token: refresh_token.to_string(),
             validity: 0,
             created_at: Instant::now(),
-            client_id: String::from(""),
-            client_secret: String::from(""),
+            client_id: client_id.to_string(),
+            client_secret: secret.to_string()
         }
     }
 
@@ -54,13 +59,13 @@ impl Credentials {
 
         // TODO: Handle non-200s
         let response = client.post(TOKEN_URL).form(&params).send().await?;
-        let AuthResponse {
+        let RefreshResponse {
             access_token,
             expires_in,
             ..
-        } = response.json::<AuthResponse>().await?;
+        } = response.json::<RefreshResponse>().await?;
 
-        println!("Refreshed to access token: {}", access_token);
+        println!("Refreshed authorization!");
 
         let credentials = Credentials {
             access_token,
@@ -80,6 +85,15 @@ impl Credentials {
 struct AuthResponse {
     access_token: String,
     refresh_token: String,
+    expires_in: u64,
+    scope: String,
+    token_type: String,
+}
+
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct RefreshResponse {
+    access_token: String,
     expires_in: u64,
     scope: String,
     token_type: String,
@@ -130,9 +144,6 @@ pub async fn authorize(
         ..
     } = response.json::<AuthResponse>().await?;
 
-    // TODO: Remove this
-    println!("Got access token: {}", access_token);
-
     let credentials = Credentials {
         access_token,
         refresh_token,
@@ -141,6 +152,8 @@ pub async fn authorize(
         client_id: client_id.to_string(),
         client_secret: secret.to_string(),
     };
+
+    println!("Received credentials: {:?}", credentials);
 
     Ok(credentials)
 }

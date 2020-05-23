@@ -17,10 +17,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("FERROTYPE_SECRET")
         .expect("Didn't get a FERROTYPE_SECRET");
 
-    let key = env.get("FERROTYPE_KEY");
+    let key = env.get("FERROTYPE_REFRESH_TOKEN");
 
     let credentials = match key {
-        Some(key) => auth::Credentials::dummy(key),
+        Some(key) => {
+            let credentials = auth::Credentials::with_refresh_token(key, client_id, secret);
+            credentials.refresh().await?
+        },
         None => auth::authorize(client_id, secret).await?,
     };
 
@@ -28,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 
-    // [ ] 1. scan fs to determine local state of the world
+    // [-] 1. scan fs to determine local state of the world
     // [x] 2. download metadata from the GP API to determine remote state of the world
     // [x] 2.1 Auth
     // [x] 2.2 Download subsequent pages
@@ -42,4 +45,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 9. "Deployment"
     // [ ] 10. Deployment on Docker
     // [ ] 11. Log levels + timestamps
+    // [x] 12. Init with a refresh token
 }
