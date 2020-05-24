@@ -56,7 +56,8 @@ impl Credentials {
             ("grant_type", "refresh_token"),
         ];
 
-        // TODO: Handle non-200s
+        // TODO: Handle non-200s explicitly; the deserialization step below currently
+        // panics on non-200s instead.
         let response = client.post(TOKEN_URL).form(&params).send().await?;
         let RefreshResponse {
             access_token,
@@ -134,7 +135,8 @@ pub async fn authorize(
         ("grant_type", "authorization_code"),
     ];
 
-    // TODO: Handle non-200s
+    // TODO: Handle non-200s explicitly; the deserialization step below currently
+    // panics on non-200s instead.
     let response = client.post(TOKEN_URL).form(&params).send().await?;
     let AuthResponse {
         access_token,
