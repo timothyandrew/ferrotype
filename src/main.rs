@@ -50,18 +50,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 3. only download changed files
     // [x] 4. start downloading
     // [x] 5. respect API limits
-    // [ ] 6. do this once every X hours
+    // [ ] 6. run automatically every X hours / respond to 429s and some classes of 5XXs by waiting a day
     // [ ] 7. Download to a temporary file and then execute a mv to prevent corruption
     // [x] 8. Download non-images correctly
     // [x] 8.1 Any photo could be a motion photo; try with `dv`
     // [ ] 8.2 Detect mime type dynamically to deal with motion photo weirdness
     // [x] 8.3 Update quotas
     // [x] 9. "Deployment"
-    // [ ] 10. Deployment on Docker
-    // [ ] 11. Log levels + timestamps
-    // [x] 12. Init with a refresh token
-    // [ ] 13. Log per-page metrics
-    // [x] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
-    // [x] 15. Don't track quota information at all; wait until the first 429 and then panic/stop instead
-    // [ ] 16. Backoff + retry
+    // [-] 10. Log levels + timestamps (not so important because of metrics)
+    // [x] 11. Init with a refresh token
+    // [x] 12. Log per-page metrics
+    // [x] 13. Cache information about which photos are definitely not motion photos to improve incremental runtime
+    // [x] 14. Don't track quota information at all; wait until the first 429 and then panic/stop instead
+    // [ ] 15. Backoff + retry
 }
