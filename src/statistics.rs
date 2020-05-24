@@ -1,21 +1,22 @@
-use futures::future::join_all;
-use std::path::{Path, PathBuf};
-use reqwest::{Client, Url};
-use tokio::fs::{create_dir_all, File, metadata,OpenOptions};
-use reqwest::StatusCode;
-use tokio::io::{AsyncWriteExt};
-use std::io::Read;
-use std::error::Error;
-use std::collections::HashSet;
+//! A download run can cache data to optimize subsequent runs; this module
+//! handles persisting and loading this cached data.
 
-use crate::metadata::{MediaItem,MediaItemType};
+use reqwest::StatusCode;
+use reqwest::Url;
+use std::collections::HashSet;
+use std::error::Error;
+use std::io::Read;
+use tokio::fs::{create_dir_all, metadata, File, OpenOptions};
+use tokio::io::AsyncWriteExt;
+
+use crate::metadata::{MediaItem, MediaItemType};
 
 const NON_MOTION_PHOTOS_FILE: &str = "non-motion-photos";
 
 /// Immutable singleton, meant to provide data from past runs to subsequent runs
 #[derive(Debug)]
 pub struct Statistics {
-    non_motion_photos: HashSet<String>
+    non_motion_photos: HashSet<String>,
 }
 
 lazy_static! {
@@ -36,14 +37,22 @@ pub fn get() -> &'static Statistics {
 }
 
 async fn persist(item: &MediaItem, filename: &str) -> Result<(), Box<dyn Error>> {
-    let mut file: File = OpenOptions::new().append(true).create(true).open(filename).await?;
+    let mut file: File = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(filename)
+        .await?;
     let line = format!("{}\n", item.id());
     file.write(line.as_bytes()).await?;
     Ok(())
 }
 
 /// Persist statistics about the current run to improve runtime for future runs.
-pub async fn persist_statistics(item: &MediaItem, url: &Url, code: StatusCode) -> Result<(), Box<dyn Error>> {
+pub async fn persist_statistics(
+    item: &MediaItem,
+    url: &Url,
+    code: StatusCode,
+) -> Result<(), Box<dyn Error>> {
     // We assume that _every_ photo is a motion photo until we can prove otherwise, which
     // happens when we attempt to download it as a video and are given a 200/404 in return.
     // Persist a list of all non-motion photo IDs to disk, so we can skip the `dv` portions
@@ -67,7 +76,7 @@ pub fn load_statistics() -> Result<Statistics, Box<dyn Error>> {
 
     for line in buffer.split("\n") {
         if line.is_empty() {
-            continue
+            continue;
         }
 
         // TODO: Is this terribly non-performant? Ignoring for now because this a fixed startup cost at the moment.

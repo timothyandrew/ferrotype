@@ -5,11 +5,11 @@ use std::env;
 extern crate lazy_static;
 
 // TODO: Move into `lib.rs`?
+mod api;
 mod auth;
 mod cli;
 mod dl;
 mod metadata;
-mod api;
 mod statistics;
 
 #[tokio::main]
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(key) => {
             let credentials = auth::Credentials::with_refresh_token(key, client_id, secret);
             credentials.refresh().await?
-        },
+        }
         None => auth::authorize(client_id, secret).await?,
     };
 

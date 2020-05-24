@@ -3,9 +3,9 @@
 use reqwest::{Client, Url};
 
 use futures::future::join_all;
-use std::path::{Path, PathBuf};
-use tokio::fs::{create_dir_all, File, metadata};
 use reqwest::StatusCode;
+use std::path::{Path, PathBuf};
+use tokio::fs::{create_dir_all, metadata, File};
 use tokio::io::AsyncWriteExt;
 
 use crate::metadata::MediaItem;
@@ -27,7 +27,11 @@ async fn create_dirs(items: &[MediaItem], prefix: &Path) -> Result<(), Box<dyn s
     Ok(())
 }
 
-async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result<StatusCode, Box<dyn std::error::Error>> {
+async fn download_file(
+    url: &Url,
+    client: &Client,
+    filename: &PathBuf,
+) -> Result<StatusCode, Box<dyn std::error::Error>> {
     let response = client.get(url.to_owned()).send().await?;
     let status = response.status();
 
@@ -40,7 +44,7 @@ async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result
 
             let mut file = File::create(filename).await?;
             file.write_all(response).await?;
-        },
+        }
         StatusCode::UNAUTHORIZED => panic!("Authorization failed!"),
         StatusCode::TOO_MANY_REQUESTS => panic!("We've hit the rate limit!"),
         _ => {

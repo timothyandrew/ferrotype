@@ -26,7 +26,6 @@ impl Credentials {
         &self.access_token
     }
 
-
     /// Instantiate a new `Credentials` instance with previously-received refresh token.
     /// This instance isn't usable until `refresh` is called on it (to exchange the refresh
     /// token for an access token).
@@ -37,7 +36,7 @@ impl Credentials {
             validity: 0,
             created_at: Instant::now(),
             client_id: client_id.to_string(),
-            client_secret: secret.to_string()
+            client_secret: secret.to_string(),
         }
     }
 
