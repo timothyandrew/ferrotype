@@ -62,5 +62,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 12. Log per-page metrics
     // [x] 13. Cache information about which photos are definitely not motion photos to improve incremental runtime
     // [x] 14. Don't track quota information at all; wait until the first 429 and then panic/stop instead
-    // [ ] 15. Backoff + retry
+    // [x] 15. Backoff + retry
+    // [ ] 16. Exponential backoff
 }

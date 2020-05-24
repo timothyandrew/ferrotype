@@ -56,7 +56,7 @@ async fn download_file(
                 file.write_all(response).await?;
             }
             401 => panic!("Authorization failed!"),
-            429 => panic!("We've hit the rate limit!"),
+            429 => panic!("We've hit the rate limit, try again later! (rate limits reset at midnight PT)"),
             404 => {
                 // Do nothing; we incorrectly assumed that this URL represents a motion photo
             },

@@ -136,7 +136,7 @@ async fn fetch_page(
                 // is working as expected.
                 panic!("Authorization failed!")
             }
-            429 => panic!("We've hit the rate limit!"),
+            429 => panic!("We've hit the rate limit, try again later! (rate limits reset at midnight PT)"),
             500..=599 => {
                 // TODO: Exponential backoff
                 metrics::tick("retry_metadata_dl_after_5xx");
