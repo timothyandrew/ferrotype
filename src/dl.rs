@@ -9,6 +9,7 @@ use tokio::fs::{create_dir_all, metadata, File};
 use tokio::io::AsyncWriteExt;
 
 use crate::metadata::MediaItem;
+use crate::metrics;
 use crate::statistics::persist_statistics;
 
 fn item_path(item: &MediaItem, prefix: &Path) -> PathBuf {
@@ -38,6 +39,8 @@ async fn download_file(
     // TODO: Abstract away this duplication
     match status {
         StatusCode::OK => {
+            metrics::tick("successful_download");
+
             // TODO: Use `bytes_stream` instead
             let response = response.bytes().await?;
             let response: &[u8] = response.as_ref();
@@ -66,14 +69,13 @@ async fn download_item(
     item: &MediaItem,
     client: &Client,
     prefix: &Path,
-) -> Result<usize, Box<dyn std::error::Error>> {
-    // `unwrap` here is _probably_ valid because not receving a valid URL here
-    // could be considered a stop-the-world error, but is there a better way to
-    // handle this?
+) -> Result<(), Box<dyn std::error::Error>> {
     let urls = item.download_urls();
-    let mut download_count = 0;
 
     for url in &urls {
+        // `unwrap` here is _probably_ valid because not receving a valid URL here
+        // could be considered a stop-the-world error, but is there a better way to
+        // handle this?
         let url = Url::parse(&url).unwrap();
         let filename = if url.to_string().contains("=dv") {
             format!("{}.mp4", item.id())
@@ -87,11 +89,12 @@ async fn download_item(
         if metadata(&path).await.is_err() {
             let status: StatusCode = download_file(&url, client, &path).await?;
             persist_statistics(item, &url, status).await?;
-            download_count += 1;
+        } else {
+            metrics::tick("file_already_exists");
         }
     }
 
-    Ok(download_count)
+    Ok(())
 }
 
 /// Download (possibly in parallel) all media items passed in, and persist to the `prefix` directory.
@@ -99,7 +102,7 @@ async fn download_item(
 pub async fn download_media_items(
     items: &[MediaItem],
     prefix: &str,
-) -> Result<usize, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
     let prefix = Path::new(prefix);
 
@@ -110,8 +113,7 @@ pub async fn download_media_items(
         .map(|item| download_item(item, &client, prefix))
         .collect();
 
-    let results = join_all(futures).await;
-    let count: usize = results.iter().flatten().sum();
+    join_all(futures).await;
 
-    Ok(count)
+    Ok(())
 }

@@ -11,6 +11,7 @@ mod cli;
 mod dl;
 mod metadata;
 mod statistics;
+mod metrics;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,7 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => auth::authorize(client_id, secret).await?,
     };
 
-    // Force this `lazy_static` to load
+    // Force `lazy_static` instances to load
+    metrics::init();
     statistics::get();
 
     metadata::fetch(credentials).await?;

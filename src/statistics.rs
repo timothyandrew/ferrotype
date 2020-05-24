@@ -6,10 +6,11 @@ use reqwest::Url;
 use std::collections::HashSet;
 use std::error::Error;
 use std::io::Read;
-use tokio::fs::{create_dir_all, metadata, File, OpenOptions};
+use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
 
 use crate::metadata::{MediaItem, MediaItemType};
+use crate::metrics;
 
 const NON_MOTION_PHOTOS_FILE: &str = "non-motion-photos";
 
@@ -59,6 +60,7 @@ pub async fn persist_statistics(
     // for them on future runs.
     if let (StatusCode::NOT_FOUND, MediaItemType::photo(_)) = (code, item.media_type()) {
         if url.to_string().contains("=dv") {
+            metrics::tick("non_motion_photo_404");
             persist(item, NON_MOTION_PHOTOS_FILE).await?;
         }
     }

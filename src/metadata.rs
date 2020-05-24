@@ -10,11 +10,10 @@ use serde::Deserialize;
 
 use crate::dl;
 use crate::statistics;
+use crate::metrics;
 
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
 const PAGE_SIZE: usize = 100;
-const METADATA_QUOTA: usize = 9000;
-const DOWNLOAD_QUOTA: usize = 72000;
 
 #[derive(Debug)]
 struct UsageAgainstQuota {
@@ -74,6 +73,7 @@ impl MediaItem {
 
         // Based on statistics from a previous run, this is a non-motionphoto.
         if non_motion_photos.contains(&self.id) {
+            metrics::tick("non_motion_photo_cache_hit");
             vec![format!("{}=d", self.baseUrl)]
         } else {
             match self.mediaMetadata.mediaType {
@@ -90,11 +90,6 @@ impl MediaItem {
 enum FetchResult {
     MorePagesExist(String),
     NoMorePagesExist,
-}
-
-fn is_over_quota(usage: &UsageAgainstQuota) -> bool {
-    println!("Current usage against quota: {:?}", usage);
-    (usage.download + PAGE_SIZE) >= DOWNLOAD_QUOTA || (usage.metadata + 1) >= METADATA_QUOTA
 }
 
 async fn fetch_page(
@@ -115,11 +110,11 @@ async fn fetch_page(
 
     match response.status() {
         StatusCode::OK => {
+            metrics::tick("metadata_dl_200");
             let response: MetadataResponse = response.json::<MetadataResponse>().await?;
 
-            // TODO: Only download missing media items
             // TODO: Parameter for dl location
-            let _count = dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
+            dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
 
             let result = if response.nextPageToken.is_empty() {
                 FetchResult::NoMorePagesExist
@@ -153,7 +148,6 @@ async fn fetch_page(
 /// - Pagination uses a continuation token, so this can't be parallelized.
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
     let mut pageToken = String::new();
-    let mut counter: usize = 1;
     let mut credentials = credentials;
 
     loop {
@@ -162,9 +156,6 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
             credentials = credentials.refresh().await?;
         }
 
-        println!("Downloading page #{}", counter);
-        counter += 1;
-
         match fetch_page(&credentials, &pageToken).await? {
             FetchResult::MorePagesExist(next) => pageToken = next,
             FetchResult::NoMorePagesExist => {
@@ -172,5 +163,7 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
                 return Ok(());
             }
         }
+
+        metrics::flush();
     }
 }
