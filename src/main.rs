@@ -64,4 +64,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [x] 14. Don't track quota information at all; wait until the first 429 and then panic/stop instead
     // [x] 15. Backoff + retry
     // [ ] 16. Exponential backoff
+    // [ ] 17. Open TODOs
+    // [ ] 18. Run `file` on everything that's downloaded: is anything NOT an uncorrupted image/video?
 }
