@@ -58,9 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [ ] 10. Deployment on Docker
     // [ ] 11. Log levels + timestamps
     // [x] 12. Init with a refresh token
-    // [ ] 13. A lot more debug logging and/or tick metrics
-    // [ ] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
-    // [ ] 15. Don't track quota information at all; wait until the first 429 and then panic/stop instead
-    // [ ] 15.1 Log metrics for a given metadata run, though: how many files were skipped, how many errors, how many downloads, etc.
+    // [ ] 13. Log per-page metrics
+    // [x] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
+    // [x] 15. Don't track quota information at all; wait until the first 429 and then panic/stop instead
     // [ ] 16. Backoff + retry
 }
