@@ -9,6 +9,7 @@ use reqwest::StatusCode;
 use tokio::io::AsyncWriteExt;
 
 use crate::metadata::MediaItem;
+use crate::statistics::persist_statistics;
 
 fn item_path(item: &MediaItem, prefix: &Path) -> PathBuf {
     let year = item.created_at().format("%Y").to_string();
@@ -26,11 +27,12 @@ async fn create_dirs(items: &[MediaItem], prefix: &Path) -> Result<(), Box<dyn s
     Ok(())
 }
 
-async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result<StatusCode, Box<dyn std::error::Error>> {
     let response = client.get(url.to_owned()).send().await?;
+    let status = response.status();
 
     // TODO: Abstract away this duplication
-    match response.status() {
+    match status {
         StatusCode::OK => {
             // TODO: Use `bytes_stream` instead
             let response = response.bytes().await?;
@@ -39,7 +41,6 @@ async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result
             let mut file = File::create(filename).await?;
             file.write_all(response).await?;
         },
-        // We shouldn't ever hit this line if the refresh token flow is working as expected.
         StatusCode::UNAUTHORIZED => panic!("Authorization failed!"),
         StatusCode::TOO_MANY_REQUESTS => panic!("We've hit the rate limit!"),
         _ => {
@@ -51,7 +52,7 @@ async fn download_file(url: &Url, client: &Client, filename: &PathBuf) -> Result
         }
     }
 
-    Ok(())
+    Ok(status)
 }
 
 // Download the file(s) underlying a given MediaItem.
@@ -80,7 +81,8 @@ async fn download_item(
         // Do nothing if file already exists
         // This assumes that a prior download of this file did _not_ result in corruption.
         if metadata(&path).await.is_err() {
-            download_file(&url, client, &path).await?;
+            let status: StatusCode = download_file(&url, client, &path).await?;
+            persist_statistics(item, &url, status).await?;
             download_count += 1;
         }
     }

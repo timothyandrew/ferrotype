@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 use std::env;
 
+#[macro_use]
+extern crate lazy_static;
+
 // TODO: Move into `lib.rs`?
 mod auth;
 mod cli;
 mod dl;
 mod metadata;
 mod api;
+mod statistics;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,6 +32,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         None => auth::authorize(client_id, secret).await?,
     };
+
+    // Force this `lazy_static` to load
+    statistics::get();
 
     metadata::fetch(credentials).await?;
 
@@ -55,4 +62,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [ ] 14. Cache information about which photos are definitely not motion photos to improve incremental runtime
     // [ ] 15. Don't track quota information at all; wait until the first 429 and then panic/stop instead
     // [ ] 15.1 Log metrics for a given metadata run, though: how many files were skipped, how many errors, how many downloads, etc.
+    // [ ] 16. Backoff + retry
 }

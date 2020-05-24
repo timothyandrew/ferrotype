@@ -9,6 +9,7 @@ use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
 
 use crate::dl;
+use crate::statistics;
 
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
 const PAGE_SIZE: usize = 100;
@@ -22,14 +23,14 @@ struct UsageAgainstQuota {
 }
 
 #[derive(Deserialize, Debug)]
-struct Photo {}
+pub struct Photo {}
 
 #[derive(Deserialize, Debug)]
 #[warn(non_camel_case_types)]
-struct Video {}
+pub struct Video {}
 
 #[derive(Deserialize, Debug)]
-enum MediaItemType {
+pub enum MediaItemType {
     photo(Photo),
     video(Video),
 }
@@ -64,10 +65,21 @@ impl MediaItem {
         &self.id
     }
 
+    pub fn media_type(&self) -> &MediaItemType {
+        &self.mediaMetadata.mediaType
+    }
+
     pub fn download_urls(&self) -> Vec<String> {
-        match self.mediaMetadata.mediaType {
-            MediaItemType::photo(_) => vec![format!("{}=d", self.baseUrl), format!("{}=dv", self.baseUrl)],
-            MediaItemType::video(_) => vec![format!("{}=dv", self.baseUrl)],
+        let non_motion_photos = statistics::get().non_motion_photos();
+
+        // Based on statistics from a previous run, this is a non-motionphoto.
+        if non_motion_photos.contains(&self.id) {
+            vec![format!("{}=d", self.baseUrl)]
+        } else {
+            match self.mediaMetadata.mediaType {
+                MediaItemType::photo(_) => vec![format!("{}=d", self.baseUrl), format!("{}=dv", self.baseUrl)],
+                MediaItemType::video(_) => vec![format!("{}=dv", self.baseUrl)],
+            }
         }
     }
 }
@@ -85,7 +97,6 @@ fn is_over_quota(usage: &UsageAgainstQuota) -> bool {
 async fn fetch_page(
     credentials: &Credentials,
     pageToken: &str,
-    usage: &mut UsageAgainstQuota,
 ) -> Result<FetchResult, Box<dyn std::error::Error>> {
     let client = Client::new();
     let params = vec![
@@ -106,9 +117,6 @@ async fn fetch_page(
             // TODO: Only download missing media items
             // TODO: Parameter for dl location
             let count = dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
-
-            usage.metadata += 1;
-            usage.download += count;
 
             let result = if response.nextPageToken.is_empty() {
                 FetchResult::NoMorePagesExist
@@ -142,21 +150,10 @@ async fn fetch_page(
 /// - Pagination uses a continuation token, so this can't be parallelized.
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
     let mut pageToken = String::new();
-    let mut counter = 1;
+    let mut counter: usize = 1;
     let mut credentials = credentials;
 
-    // TODO: replace with a ::new function
-    let mut usage = UsageAgainstQuota {
-        download: 0,
-        metadata: 0,
-    };
-
     loop {
-        if is_over_quota(&usage) {
-            println!("Exiting early; over quota! Try again after midnight Pacific Time.");
-            return Ok(());
-        }
-
         if credentials.is_token_expiry_imminent() {
             println!("Token expiry is imminent (less than five minutes away); attempting to refresh token.");
             credentials = credentials.refresh().await?;
@@ -165,7 +162,7 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
         println!("Downloading page #{}", counter);
         counter += 1;
 
-        match fetch_page(&credentials, &pageToken, &mut usage).await? {
+        match fetch_page(&credentials, &pageToken).await? {
             FetchResult::MorePagesExist(next) => pageToken = next,
             FetchResult::NoMorePagesExist => {
                 println!("All done!");
