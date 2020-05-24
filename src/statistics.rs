@@ -72,17 +72,18 @@ pub async fn persist_statistics(
 pub fn load_statistics() -> Result<Statistics, Box<dyn Error>> {
     let mut non_motion_photos = HashSet::<String>::new();
 
-    let mut f = std::fs::File::open(NON_MOTION_PHOTOS_FILE)?;
-    let mut buffer = String::new();
-    f.read_to_string(&mut buffer)?;
+    if let Ok(mut f) = std::fs::File::open(NON_MOTION_PHOTOS_FILE) {
+        let mut buffer = String::new();
+        f.read_to_string(&mut buffer)?;
 
-    for line in buffer.split("\n") {
-        if line.is_empty() {
-            continue;
+        for line in buffer.split("\n") {
+            if line.is_empty() {
+                continue;
+            }
+
+            // TODO: Is this terribly non-performant? Ignoring for now because this a fixed startup cost at the moment.
+            non_motion_photos.insert(line.to_owned());
         }
-
-        // TODO: Is this terribly non-performant? Ignoring for now because this a fixed startup cost at the moment.
-        non_motion_photos.insert(line.to_owned());
     }
 
     Ok(Statistics { non_motion_photos })

@@ -4,13 +4,17 @@ use reqwest::{Client, Url};
 
 use futures::future::join_all;
 use reqwest::StatusCode;
+use std::time::Duration;
 use std::path::{Path, PathBuf};
 use tokio::fs::{create_dir_all, metadata, File};
+use tokio::time;
 use tokio::io::AsyncWriteExt;
 
 use crate::metadata::MediaItem;
 use crate::metrics;
 use crate::statistics::persist_statistics;
+
+const RETRY_ATTEMPTS: usize = 3;
 
 fn item_path(item: &MediaItem, prefix: &Path) -> PathBuf {
     let year = item.created_at().format("%Y").to_string();
@@ -31,35 +35,51 @@ async fn create_dirs(items: &[MediaItem], prefix: &Path) -> Result<(), Box<dyn s
 async fn download_file(
     url: &Url,
     client: &Client,
-    filename: &PathBuf,
+    filename: &PathBuf
 ) -> Result<StatusCode, Box<dyn std::error::Error>> {
-    let response = client.get(url.to_owned()).send().await?;
-    let status = response.status();
+    let mut attempt = 0;
 
-    // TODO: Abstract away this duplication
-    match status {
-        StatusCode::OK => {
-            metrics::tick("successful_download");
+    while attempt < RETRY_ATTEMPTS {
+        let response = client.get(url.to_owned()).send().await?;
+        let status = response.status();
 
-            // TODO: Use `bytes_stream` instead
-            let response = response.bytes().await?;
-            let response: &[u8] = response.as_ref();
+        // TODO: Abstract away this duplication
+        match status.as_u16() {
+            200 => {
+                metrics::tick("dl_200");
 
-            let mut file = File::create(filename).await?;
-            file.write_all(response).await?;
+                // TODO: Use `bytes_stream` instead
+                let response = response.bytes().await?;
+                let response: &[u8] = response.as_ref();
+
+                let mut file = File::create(filename).await?;
+                file.write_all(response).await?;
+            }
+            401 => panic!("Authorization failed!"),
+            429 => panic!("We've hit the rate limit!"),
+            404 => {
+                // Do nothing; we incorrectly assumed that this URL represents a motion photo
+            },
+            500..=599 => {
+                // TODO: Exponential backoff
+                metrics::tick("retry_dl_after_5xx");
+                time::delay_for(Duration::from_secs(1)).await;
+                attempt += 1;
+                continue;
+            },
+            status => {
+                panic!("Failed to download file! Failed with status: {}", status);
+            }
         }
-        StatusCode::UNAUTHORIZED => panic!("Authorization failed!"),
-        StatusCode::TOO_MANY_REQUESTS => panic!("We've hit the rate limit!"),
-        _ => {
-            // TODO: Implement retry logic:
-            // - https://developers.google.com/photos/library/guides/api-limits-quotas
-            // - https://developers.google.com/photos/library/guides/best-practices
 
-            // Do nothing for now, assuming that this will resolve itself in a future run.
-        }
+        return Ok(status)
     }
 
-    Ok(status)
+    // What do we do when we exhaust retries for a download; we don't want to panic and 
+    // affect the rest of this run; it's better to just do nothing and assume that
+    // Google will fix this before a future run..
+    metrics::tick("dl_failed_retries_exhausted");
+    Ok(StatusCode::from_u16(500)?)
 }
 
 // Download the file(s) underlying a given MediaItem.

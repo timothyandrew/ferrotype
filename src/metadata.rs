@@ -5,7 +5,9 @@
 
 use crate::auth::Credentials;
 use chrono::{DateTime, Utc};
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{Client, Url};
+use tokio::time;
+use std::time::Duration;
 use serde::Deserialize;
 
 use crate::dl;
@@ -14,6 +16,7 @@ use crate::metrics;
 
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
 const PAGE_SIZE: usize = 100;
+const RETRY_ATTEMPTS: usize = 3;
 
 #[derive(Debug)]
 struct UsageAgainstQuota {
@@ -96,47 +99,58 @@ async fn fetch_page(
     credentials: &Credentials,
     pageToken: &str,
 ) -> Result<FetchResult, Box<dyn std::error::Error>> {
+    let mut attempt = 0;
     let client = Client::new();
-    let params = vec![
-        ("pageSize", PAGE_SIZE.to_string()),
-        ("pageToken", pageToken.to_string()),
-    ];
-    let url = Url::parse_with_params(LIST_URL, &params)?;
+   
+    while attempt < RETRY_ATTEMPTS {
+        let params = vec![
+            ("pageSize", PAGE_SIZE.to_string()),
+            ("pageToken", pageToken.to_string()),
+        ];
 
-    let request = client
-        .get(url)
-        .header("Authorization", format!("Bearer {}", credentials.get_key()));
-    let response = request.send().await?;
+        let url = Url::parse_with_params(LIST_URL, &params)?;
 
-    match response.status() {
-        StatusCode::OK => {
-            metrics::tick("metadata_dl_200");
-            let response: MetadataResponse = response.json::<MetadataResponse>().await?;
+        let request = client
+            .get(url)
+            .header("Authorization", format!("Bearer {}", credentials.get_key()));
+        let response = request.send().await?;
 
-            // TODO: Parameter for dl location
-            dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
+        match response.status().as_u16() {
+            200 => {
+                metrics::tick("metadata_dl_200");
+                let response: MetadataResponse = response.json::<MetadataResponse>().await?;
 
-            let result = if response.nextPageToken.is_empty() {
-                FetchResult::NoMorePagesExist
-            } else {
-                FetchResult::MorePagesExist(response.nextPageToken)
-            };
+                // TODO: Parameter for dl location
+                dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
 
-            Ok(result)
-        }
-        StatusCode::UNAUTHORIZED => {
-            // We shouldn't ever hit this line if the refresh token flow
-            // is working as expected.
-            panic!("Authorization failed!")
-        }
-        StatusCode::TOO_MANY_REQUESTS => panic!("We've hit the rate limit!"),
-        status => {
-            // TODO: Implement retry logic:
-            // - https://developers.google.com/photos/library/guides/api-limits-quotas
-            // - https://developers.google.com/photos/library/guides/best-practices
-            panic!("Failed to fetch metadata! Failed with status: {}", status);
+                let result = if response.nextPageToken.is_empty() {
+                    FetchResult::NoMorePagesExist
+                } else {
+                    FetchResult::MorePagesExist(response.nextPageToken)
+                };
+
+                return Ok(result);
+            }
+            401 => {
+                // We shouldn't ever hit this line if the refresh token flow
+                // is working as expected.
+                panic!("Authorization failed!")
+            }
+            429 => panic!("We've hit the rate limit!"),
+            500..=599 => {
+                // TODO: Exponential backoff
+                metrics::tick("retry_metadata_dl_after_5xx");
+                time::delay_for(Duration::from_secs(5)).await;
+                attempt += 1;
+                continue;
+            },
+            status => {
+                panic!("Failed to fetch metadata! Failed with status: {}", status);
+            }
         }
     }
+
+    panic!("Failed to fetch a page of metadata after {} retries.", RETRY_ATTEMPTS);
 }
 
 /// Fetch all metadata. By design, this module is very specific to this use-case, and
