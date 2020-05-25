@@ -7,6 +7,7 @@ use crate::auth::Credentials;
 use chrono::{DateTime, Utc};
 use reqwest::{Client, Url};
 use tokio::time;
+use tokio::join;
 use std::time::Duration;
 use serde::Deserialize;
 
@@ -17,12 +18,6 @@ use crate::metrics;
 const LIST_URL: &str = "https://photoslibrary.googleapis.com/v1/mediaItems";
 const PAGE_SIZE: usize = 100;
 const RETRY_ATTEMPTS: usize = 3;
-
-#[derive(Debug)]
-struct UsageAgainstQuota {
-    metadata: usize,
-    download: usize,
-}
 
 #[derive(Deserialize, Debug)]
 pub struct Photo {}
@@ -90,15 +85,10 @@ impl MediaItem {
     }
 }
 
-enum FetchResult {
-    MorePagesExist(String),
-    NoMorePagesExist,
-}
-
 async fn fetch_page(
     credentials: &Credentials,
     pageToken: &str,
-) -> Result<FetchResult, Box<dyn std::error::Error>> {
+) -> Result<MetadataResponse, Box<dyn std::error::Error>> {
     let mut attempt = 0;
     let client = Client::new();
    
@@ -120,16 +110,8 @@ async fn fetch_page(
                 metrics::tick("metadata_dl_200");
                 let response: MetadataResponse = response.json::<MetadataResponse>().await?;
 
-                // TODO: Parameter for dl location
-                dl::download_media_items(&response.mediaItems, "/mnt/z/ferrotype").await?;
 
-                let result = if response.nextPageToken.is_empty() {
-                    FetchResult::NoMorePagesExist
-                } else {
-                    FetchResult::MorePagesExist(response.nextPageToken)
-                };
-
-                return Ok(result);
+                return Ok(response);
             }
             401 => {
                 // We shouldn't ever hit this line if the refresh token flow
@@ -161,21 +143,63 @@ async fn fetch_page(
 /// - The API allows 100 metadata items to be fetched per request.
 /// - Pagination uses a continuation token, so this can't be parallelized.
 pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::Error>> {
-    let mut pageToken = String::new();
     let mut credentials = credentials;
+    let mut nextPage = fetch_page(&credentials, "").await?;
+
+    /* Implementation note: This was intially structured as:
+     *           ┌──────────────────┐
+     *           │    Download a    │
+     *        ┌ ▶│  metadata page   │────────┐         ┌─────────────────────┐
+     *           └──────────────────┘        │         │ Download media from │
+     *        │                              └────────▶│  the metadata page  │─ ┐
+     *                                                 └─────────────────────┘
+     *        │                  ┌─────────────────────────┐                    │
+     *         ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤  Until no pages remain  ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+     *                           └─────────────────────────┘
+     *
+     * But this left a lot of throughput on the table. The "download media" step saturates
+     * the network, but the "download a page" step does not. A robust way to fix this is to
+     * use a queuing system and download metadata pages independently of the media itself, but
+     * I'm unconvinced that this extra complexity is worth the tradeoff here. Instead, I went
+     * with an intermediate step up, which looks like:
+     *
+     *                                      ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+     *
+     *                                      │                       ┌─────────────────────────────────┐ │
+     *                                                              │ Download the next metadata page │
+     *                                      │      ┌───────────────▶│        (if one exists)          │─┘
+     *                                             │                └─────────────────────────────────┘
+     *        ┌──────────────────┐          │      │
+     *        │    Download a    │          ▼      │
+     *        │  metadata page   │──────────■──────┤
+     *        └──────────────────┘                 │                  ┌──────────────────────────────┐
+     *                                             │                  │   Download media from the    │
+     *                                             └─────────────────▶│        metadata page         │
+     *                                                                └──────────────────────────────┘
+     *
+     * At least on an initial run, this ensures that we're a lot more likely to saturate the network
+     * than the previous approach, without the (non-trivial) overhead of using a queueing system.
+    **/
 
     loop {
+        let currentPage = nextPage;
+
         if credentials.is_token_expiry_imminent() {
             println!("Token expiry is imminent (less than five minutes away); attempting to refresh token.");
             credentials = credentials.refresh().await?;
         }
 
-        match fetch_page(&credentials, &pageToken).await? {
-            FetchResult::MorePagesExist(next) => pageToken = next,
-            FetchResult::NoMorePagesExist => {
-                println!("All done!");
-                return Ok(());
-            }
+        // TODO: Parameter for dl location
+        let maybeDownloadCurrentPage = dl::download_media_items(&currentPage.mediaItems, "/mnt/z/ferrotype");
+        let maybeNextPage = fetch_page(&credentials, &currentPage.nextPageToken);
+
+        if currentPage.nextPageToken.is_empty() {
+            maybeDownloadCurrentPage.await?;
+            println!("All done!");
+            return Ok(());
+        } else {
+            let (maybeNextPage, _) = join!(maybeNextPage, maybeDownloadCurrentPage);
+            nextPage = maybeNextPage.unwrap();
         }
 
         metrics::flush();
