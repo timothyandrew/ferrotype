@@ -90,7 +90,7 @@ async fn fetch_page(
     pageToken: &str,
 ) -> Result<MetadataResponse, Box<dyn std::error::Error>> {
     let mut attempt = 0;
-    let client = Client::new();
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
    
     while attempt < RETRY_ATTEMPTS {
         let params = vec![

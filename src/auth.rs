@@ -1,5 +1,6 @@
 use reqwest::{Client, Url};
 use serde::Deserialize;
+use std::time::Duration;
 
 use std::time::Instant;
 
@@ -47,7 +48,7 @@ impl Credentials {
     }
 
     pub async fn refresh(&self) -> Result<Credentials, Box<dyn std::error::Error>> {
-        let client = Client::new();
+        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
         let params = vec![
             ("client_id", &self.client_id[..]),
@@ -104,7 +105,7 @@ pub async fn authorize(
     client_id: &str,
     secret: &str,
 ) -> Result<Credentials, Box<dyn std::error::Error>> {
-    let client = Client::new();
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
     let params = vec![
         ("client_id", client_id),

@@ -123,7 +123,7 @@ pub async fn download_media_items(
     items: &[MediaItem],
     prefix: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new();
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
     let prefix = Path::new(prefix);
 
     create_dirs(items, prefix).await?;

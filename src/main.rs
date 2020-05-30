@@ -67,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // [ ] 17. Open TODOs
     // [ ] 18. Run `file` on everything that's downloaded: is anything NOT an uncorrupted image/video?
     // [ ] 19. Documentataion / README
-    // [ ] 20. Timeouts
-    // [ ] 21. Better visiblity (debug logging) into a single page's downloads
+    // [x] 20. Timeouts
+    // [ ] 21. Handle timeouts without panicking
+    // [ ] 22. Better visiblity (debug logging) into a single page's downloads
 }
