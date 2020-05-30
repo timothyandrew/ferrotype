@@ -50,7 +50,7 @@ pub struct MediaItem {
 #[derive(Deserialize, Debug)]
 struct MetadataResponse {
     mediaItems: Vec<MediaItem>,
-    nextPageToken: String,
+    nextPageToken: Option<String>,
 }
 
 impl MediaItem {
@@ -191,16 +191,19 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
 
         // TODO: Parameter for dl location
         let maybeDownloadCurrentPage = dl::download_media_items(&currentPage.mediaItems, "/mnt/z/ferrotype");
-        let maybeNextPage = fetch_page(&credentials, &currentPage.nextPageToken);
 
-        if currentPage.nextPageToken.is_empty() {
-            maybeDownloadCurrentPage.await?;
-            println!("All done!");
-            return Ok(());
-        } else {
-            let (maybeNextPage, _) = join!(maybeNextPage, maybeDownloadCurrentPage);
-            nextPage = maybeNextPage.unwrap();
-        }
+        match currentPage.nextPageToken {
+            Some(nextPageToken) => {
+                let maybeNextPage = fetch_page(&credentials, &nextPageToken);
+                let (maybeNextPage, _) = join!(maybeNextPage, maybeDownloadCurrentPage);
+                nextPage = maybeNextPage.unwrap();
+            }
+            None => {
+                maybeDownloadCurrentPage.await?;
+                println!("All done!");
+                return Ok(());
+            }
+        };
 
         metrics::flush();
     }
