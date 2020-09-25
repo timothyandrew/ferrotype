@@ -49,7 +49,7 @@ pub struct MediaItem {
 
 #[derive(Deserialize, Debug)]
 struct MetadataResponse {
-    mediaItems: Vec<MediaItem>,
+    mediaItems: Option<Vec<MediaItem>>,
     nextPageToken: Option<String>,
 }
 
@@ -190,7 +190,8 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
         }
 
         // TODO: Parameter for dl location
-        let maybeDownloadCurrentPage = dl::download_media_items(&currentPage.mediaItems, "/mnt/z/ferrotype");
+        let mediaItems = currentPage.mediaItems.unwrap_or_default();
+        let maybeDownloadCurrentPage = dl::download_media_items(&mediaItems, "/mnt/z/ferrotype");
 
         match currentPage.nextPageToken {
             Some(nextPageToken) => {
