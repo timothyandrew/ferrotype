@@ -191,7 +191,7 @@ pub async fn fetch(credentials: Credentials) -> Result<(), Box<dyn std::error::E
 
         // TODO: Parameter for dl location
         let mediaItems = currentPage.mediaItems.unwrap_or_default();
-        let maybeDownloadCurrentPage = dl::download_media_items(&mediaItems, "/mnt/shared/Z/ferrotype");
+        let maybeDownloadCurrentPage = dl::download_media_items(&mediaItems, "/data/ferrotype");
 
         match currentPage.nextPageToken {
             Some(nextPageToken) => {
