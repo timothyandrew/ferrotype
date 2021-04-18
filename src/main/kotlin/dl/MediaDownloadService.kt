@@ -1,5 +1,6 @@
 package dl
 
+import FileBackedCache
 import MediaItem
 import delayUntilMidnightPT
 import io.ktor.client.*
@@ -9,15 +10,11 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.nio.charset.Charset
 import java.time.format.DateTimeFormatter
-import kotlin.time.ExperimentalTime
-import kotlin.time.minutes
 
 // TRICKY: Google's API documentation is incorrect for motion photos.
 //   - "Motion photos contain both photo and video elements" ← THIS IS NOT TRUE
@@ -41,22 +38,7 @@ class MediaDownloadService(
     private val maxRetries = 3
 
     // A set of `MediaItem` ids representing media items we know are _not_ motion photos
-    // TODO: Is @Volatile guaranteed here?
-    private val nonMotionPhotoCache = mutableSetOf<String>()
-
-    private fun loadNonMotionPhotoCache() {
-        log.info("Loading non-motion photo cache")
-        val data = File(nonMotionPhotoCachePath).readLines(Charset.defaultCharset())
-        nonMotionPhotoCache.clear()
-        nonMotionPhotoCache.addAll(data)
-        log.info("Loaded non-motion photo cache")
-    }
-
-    private fun writeNonMotionPhotoCache() {
-        log.info("Writing non-motion photo cache to disk")
-        val data = nonMotionPhotoCache.joinToString("\n")
-        File(nonMotionPhotoCachePath).writeText(data)
-    }
+    private val nonMotionPhotoCache = FileBackedCache(nonMotionPhotoCachePath)
 
     private fun itemDir(item: MediaItem, prefix: File): File {
         val year = item.creationTime().year.toString()
@@ -127,19 +109,18 @@ class MediaDownloadService(
         for (url in urls) launch(Dispatchers.IO) { downloadUrl(url, dir, item) }
     }
 
-    @OptIn(ExperimentalTime::class)
     suspend fun start() = coroutineScope {
         log.info("Starting media download service...")
 
-        val mainLoop = launch {
-            var counter = 0
+        // TODO: Is there a better pattern here?
+        launch { nonMotionPhotoCache.initialize() }
+
+        // TODO: Don't start receiving until the non-motion photo cache is ready
+        launch {
             while (true) {
                 val items = getMediaItems.receive()
                 items.map { async { downloadItem(it) } }.awaitAll()
-                if (counter % 10 == 0) writeNonMotionPhotoCache()
             }
         }
-
-        val loadCache = launch(Dispatchers.IO) { loadNonMotionPhotoCache() }
     }
 }
