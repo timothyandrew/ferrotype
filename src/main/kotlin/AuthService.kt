@@ -136,7 +136,7 @@ class AuthService(private var credentials: Credentials, private val send: SendCh
             log.info("Fetched access token")
         }
 
-        val initialTokenFetch = launch {
+        launch {
             delay(2.seconds.toLongMilliseconds())
             while(true) {
                 val token = accessToken
@@ -150,7 +150,7 @@ class AuthService(private var credentials: Credentials, private val send: SendCh
             }
         }
 
-        val periodicTokenRefresh = launch {
+        launch {
             while(true) {
                 val expiresIn = accessTokenExpiresIn
 
@@ -164,7 +164,7 @@ class AuthService(private var credentials: Credentials, private val send: SendCh
                     delay(delayFor.toLongMilliseconds())
 
                     log.info("Access token is going to expire in 5 minutes. Refreshing!")
-                    getTokenViaRefresh(credentials.refreshToken!!)
+                    refresh()
                     log.info("Access token refreshed!")
                 }
             }
