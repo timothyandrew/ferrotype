@@ -33,7 +33,8 @@ class MediaDownloadService(
     private val getMediaItems: ReceiveChannel<List<MediaItem>>,
     private val prefix: String,
     private val nonMotionPhotoCachePath: String,
-    private val sendMetric: SendChannel<Metric>
+    private val sendMetric: SendChannel<Metric>,
+    private val sendDownloadedFile: SendChannel<File>
 ) {
     private val log = LoggerFactory.getLogger("MediaDownloadService")
     private val client = HttpClient(CIO) { expectSuccess = false }
@@ -84,8 +85,9 @@ class MediaDownloadService(
         when {
             response.status == HttpStatusCode.OK -> {
                 val data = response.receive<ByteArray>()
-                sendMetric.send(Metric.MEDIA_ITEM_DL)
                 file.writeBytes(data)
+                sendMetric.send(Metric.MEDIA_ITEM_DL)
+                sendDownloadedFile.send(file)
             }
             response.status == HttpStatusCode.Unauthorized -> throw Error("Unauthorized!")
             response.status == HttpStatusCode.TooManyRequests -> {
@@ -122,7 +124,7 @@ class MediaDownloadService(
             else -> throw Error("Invalid API response; file isn't a photo OR a video")
         }
 
-        urls.map { async { downloadUrl(it, dir, item) } }.awaitAll()
+        for (url in urls) launch(Dispatchers.IO) { downloadUrl(url, dir, item) }
     }
 
     @OptIn(ExperimentalTime::class)
