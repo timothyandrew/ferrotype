@@ -23,13 +23,7 @@ fun main() = runBlocking<Unit> {
     val getAccessToken = Channel<String>()
     val getMetadataPage = Channel<List<MediaItem>>()
 
-    // TODO: Download images
-    // TODO: Recheck motion photo logic
-    // TODO: Refresh token in 55 minutes
-    // TODO: Auth: handle non-200s
     // TODO: Metrics
-    // TODO: Don't crash when we hit the rate limit
-    // TODO: Retry on 500s
 
     coroutineScope {
         try {

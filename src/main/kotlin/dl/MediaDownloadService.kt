@@ -1,6 +1,7 @@
 package dl
 
 import MediaItem
+import delayUntilMidnightPT
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -33,6 +34,7 @@ class MediaDownloadService(
 ) {
     private val log = LoggerFactory.getLogger("MediaDownloadService")
     private val client = HttpClient(CIO) { expectSuccess = false }
+    private val maxRetries = 3
 
     // A set of `MediaItem` ids representing media items we know are _not_ motion photos
     // TODO: Is @Volatile guaranteed here?
@@ -60,7 +62,12 @@ class MediaDownloadService(
         return dir
     }
 
-    private suspend fun downloadUrl(url: String, dir: File, item: MediaItem) {
+    private suspend fun downloadUrl(url: String, dir: File, item: MediaItem, retryCount: Int = 0) {
+        if (retryCount >= maxRetries) {
+            log.warn("Exceeded maximum retries while downloading item with id ${item.id}")
+            return
+        }
+
         val filename = if (url.contains("=dv")) "${item.id}.mp4" else "${item.id}.jpg"
         val file = dir.resolve(File(filename))
 
@@ -73,10 +80,13 @@ class MediaDownloadService(
                 file.writeBytes(data)
             }
             response.status == HttpStatusCode.Unauthorized -> throw Error("Unauthorized!")
-            response.status == HttpStatusCode.TooManyRequests -> throw Error("We've hit the rate limit, try again later! (rate limits reset at midnight PT)")
+            response.status == HttpStatusCode.TooManyRequests -> {
+                delayUntilMidnightPT()
+                downloadUrl(url, dir, item, retryCount + 1)
+            }
             // We checked to see if a photo was also a motion photo, a 404 means the answer was NO
             response.status == HttpStatusCode.NotFound -> nonMotionPhotoCache.add(item.id)
-            response.status.value in (500..599) -> TODO("Retry logic")
+            response.status.value in (500..599) -> downloadUrl(url, dir, item, retryCount + 1)
             else -> throw Error("Unknown response code (${response.status.value}) when downloading a media item")
         }
     }

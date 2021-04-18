@@ -9,7 +9,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import java.time.Duration
 import kotlin.time.ExperimentalTime
+import kotlin.time.minutes
 import kotlin.time.seconds
 
 data class Credentials(val clientId: String, val clientSecret: String, val refreshToken: String? = null) {
@@ -41,27 +43,8 @@ class AuthService(private var credentials: Credentials, private val send: Channe
     @Volatile
     private var accessToken: String? = null
 
-    @OptIn(ExperimentalTime::class)
-    suspend fun start() = coroutineScope {
-        launch {
-            if (credentials.refreshToken == null) authorizeInitial() else refresh()
-            log.info("Fetched access token")
-        }
-
-        launch {
-            delay(2.seconds.toLongMilliseconds())
-            while(true) {
-                val token = accessToken
-
-                if(token == null) {
-                    log.warn("Don't have an access token yet; waiting 5 seconds")
-                    delay(5.seconds.toLongMilliseconds())
-                } else {
-                    send.send(token)
-                }
-            }
-        }
-    }
+    @Volatile
+    private var accessTokenExpiresIn: Int? = null
 
     private val client = HttpClient(CIO) {
         install(JsonFeature) {
@@ -130,6 +113,8 @@ class AuthService(private var credentials: Credentials, private val send: Channe
         val response = getToken(code)
 
         accessToken = response.accessToken
+        accessTokenExpiresIn = response.expiresIn
+
         credentials = credentials.withRefreshToken(response.refreshToken)
         println("3. Save this refresh token for next time: ${response.refreshToken}")
     }
@@ -138,5 +123,48 @@ class AuthService(private var credentials: Credentials, private val send: Channe
         val refreshToken = credentials.refreshToken ?: throw Error("Can't refresh without a refresh token")
         val response = getTokenViaRefresh(refreshToken)
         accessToken = response.accessToken
+        accessTokenExpiresIn = response.expiresIn
+    }
+
+    @OptIn(ExperimentalTime::class)
+    suspend fun start() = coroutineScope {
+        launch {
+            if (credentials.refreshToken == null) authorizeInitial() else refresh()
+            log.info("Fetched access token")
+        }
+
+        val initialTokenFetch = launch {
+            delay(2.seconds.toLongMilliseconds())
+            while(true) {
+                val token = accessToken
+
+                if(token == null) {
+                    log.warn("Don't have an access token yet; waiting 5 seconds")
+                    delay(5.seconds.toLongMilliseconds())
+                } else {
+                    send.send(token)
+                }
+            }
+        }
+
+        val periodicTokenRefresh = launch {
+            while(true) {
+                val expiresIn = accessTokenExpiresIn
+
+                if(expiresIn == null) {
+                    log.info("Waiting for token to be set so I can determine when to refresh")
+                    delay(5.seconds.toLongMilliseconds())
+                } else {
+                    val delayFor = expiresIn.seconds - 5.minutes
+                    log.info("Going to refresh this access token in ${delayFor.inMinutes} minutes")
+
+                    delay(delayFor.toLongMilliseconds())
+
+                    log.info("Access token is going to expire in 5 minutes. Refreshing!")
+                    getTokenViaRefresh(credentials.refreshToken!!)
+                    log.info("Access token refreshed!")
+                }
+            }
+        }
     }
 }
