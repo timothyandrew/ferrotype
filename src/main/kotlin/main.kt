@@ -2,7 +2,6 @@ import dl.MediaDownloadService
 import dl.MetadataDownloadService
 import dl.Metric
 import dl.MetricsService
-import io.github.cdimascio.dotenv.dotenv
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
