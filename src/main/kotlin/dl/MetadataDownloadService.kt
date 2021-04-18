@@ -29,7 +29,7 @@ class MetadataDownloadService(
     private val sendMetric: SendChannel<Metric>
 ) {
     private val maxRetries = 10
-    private val runInterval = 2.days
+    private val runInterval = 3.days
     private val log = LoggerFactory.getLogger("MetadataDownloadService")
 
     private val client = HttpClient(CIO) {

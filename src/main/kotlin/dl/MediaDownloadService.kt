@@ -129,23 +129,17 @@ class MediaDownloadService(
 
     @OptIn(ExperimentalTime::class)
     suspend fun start() = coroutineScope {
-
         log.info("Starting media download service...")
 
         val mainLoop = launch {
+            var counter = 0
             while (true) {
                 val items = getMediaItems.receive()
                 items.map { async { downloadItem(it) } }.awaitAll()
+                if (counter % 10 == 0) writeNonMotionPhotoCache()
             }
         }
 
         val loadCache = launch(Dispatchers.IO) { loadNonMotionPhotoCache() }
-
-        val saveCachePeriodically = launch(Dispatchers.IO) {
-            while (true) {
-                delay(5.minutes.toLongMilliseconds())
-                writeNonMotionPhotoCache()
-            }
-        }
     }
 }

@@ -27,8 +27,9 @@ class SSDCacheService(
 
     private fun getFilename(file: File): String {
         val dirName = file.parentFile.name
+        val current = System.currentTimeMillis()
         val extension = file.extension
-        return "media-$dirName-${UUID.randomUUID()}.$extension"
+        return "media-${current}-$dirName-${UUID.randomUUID()}.$extension"
     }
 
     @OptIn(ExperimentalTime::class)
