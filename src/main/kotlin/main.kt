@@ -5,8 +5,11 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 
 fun main() = runBlocking<Unit> {
+    val log = LoggerFactory.getLogger("mainLoop")
+
     val env = dotenv() {
         directory = System.getProperty("user.home")
         filename = ".ferrotype"
@@ -20,15 +23,23 @@ fun main() = runBlocking<Unit> {
     val getAccessToken = Channel<String>()
     val getMetadataPage = Channel<List<MediaItem>>()
 
+    // TODO: Download images
+    // TODO: Recheck motion photo logic
+    // TODO: Refresh token in 55 minutes
+    // TODO: Auth: handle non-200s
+    // TODO: Metrics
+    // TODO: Don't crash when we hit the rate limit
+    // TODO: Retry on 500s
+
     coroutineScope {
         try {
             launch { AuthService(credentials, getAccessToken).start() }
             launch { MetadataDownloadService(getMetadataPage, getAccessToken).start() }
-            launch { MediaDownloadService(getMetadataPage).start() }
+            launch { MediaDownloadService(getMetadataPage, "/tmp/ferrotype", "/home/tim/ferrotype-db/non-motion-photos").start() }
         } catch (e: Exception) {
-            println("Catastrophic failure: $e")
+            log.error("Catastrophic failure!", e)
         }
     }
 
-    println("Shutting down...")
+    log.info("Shutting down...")
 }

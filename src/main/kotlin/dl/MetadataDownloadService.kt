@@ -1,5 +1,6 @@
 package dl
 
+import MediaItem
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -8,6 +9,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.channels.Channel
+import org.slf4j.LoggerFactory
 
 data class GetMetadataPageResponse(
     val mediaItems: List<MediaItem>,
@@ -18,11 +20,15 @@ class MetadataDownloadService(
     private val send: Channel<List<MediaItem>>,
     private val getAccessToken: Channel<String>
 ) {
+    private val log = LoggerFactory.getLogger("MetadataDownloadService")
+
     private val client = HttpClient(CIO) {
         expectSuccess = false
 
         install(JsonFeature) {
-            serializer = GsonSerializer()
+            serializer = GsonSerializer() {
+                setDateFormat("yyyy-MM-dd'T'HH:mm:ssz")
+            }
         }
     }
 
@@ -38,7 +44,7 @@ class MetadataDownloadService(
         }
 
 
-        println("Going to download a metadata page")
+        log.info("Going to download a metadata page")
 
         return client.get(url.build()) {
             headers {
@@ -59,7 +65,7 @@ class MetadataDownloadService(
                     send.send(page.mediaItems)
 
                     if (page.nextPageToken == null) {
-                        println("All metadata pages downloaded")
+                        log.info("All metadata pages downloaded")
                         break
                     } else {
                         pageToken = page.nextPageToken
@@ -68,6 +74,7 @@ class MetadataDownloadService(
                 response.status == HttpStatusCode.Unauthorized -> throw Error("Unauthorized!")
                 response.status == HttpStatusCode.TooManyRequests -> throw Error("We've hit the rate limit, try again later! (rate limits reset at midnight PT)")
                 response.status.value in (500..599) -> TODO("Retry logic")
+                else -> throw Error("Unknown response code (${response.status.value}) when downloading a page of metadata")
             }
         }
     }

@@ -19,6 +19,7 @@ dependencies {
     implementation("io.ktor:ktor-client-cio:1.5.3")
     implementation("io.ktor:ktor-client-gson:1.5.3")
     implementation("io.github.cdimascio:dotenv-kotlin:6.2.2")
+    implementation("ch.qos.logback:logback-classic:1.2.3")
 
     testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.6.0")

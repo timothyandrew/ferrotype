@@ -8,6 +8,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 import kotlin.time.ExperimentalTime
 import kotlin.time.seconds
 
@@ -35,6 +36,8 @@ data class GetTokenViaRefreshResponse(
 
 
 class AuthService(private var credentials: Credentials, private val send: Channel<String>) {
+    private val log = LoggerFactory.getLogger("AuthService")
+
     @Volatile
     private var accessToken: String? = null
 
@@ -42,7 +45,7 @@ class AuthService(private var credentials: Credentials, private val send: Channe
     suspend fun start() = coroutineScope {
         launch {
             if (credentials.refreshToken == null) authorizeInitial() else refresh()
-            println("Fetched access token")
+            log.info("Fetched access token")
         }
 
         launch {
@@ -51,7 +54,7 @@ class AuthService(private var credentials: Credentials, private val send: Channe
                 val token = accessToken
 
                 if(token == null) {
-                    println("Don't have an access token yet; waiting 5 seconds")
+                    log.warn("Don't have an access token yet; waiting 5 seconds")
                     delay(5.seconds.toLongMilliseconds())
                 } else {
                     send.send(token)
