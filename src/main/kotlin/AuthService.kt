@@ -5,6 +5,7 @@ import io.ktor.client.features.json.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -37,7 +38,7 @@ data class GetTokenViaRefreshResponse(
 )
 
 
-class AuthService(private var credentials: Credentials, private val send: Channel<String>) {
+class AuthService(private var credentials: Credentials, private val send: SendChannel<String>) {
     private val log = LoggerFactory.getLogger("AuthService")
 
     @Volatile
@@ -128,6 +129,8 @@ class AuthService(private var credentials: Credentials, private val send: Channe
 
     @OptIn(ExperimentalTime::class)
     suspend fun start() = coroutineScope {
+        log.info("Starting auth service...")
+
         launch {
             if (credentials.refreshToken == null) authorizeInitial() else refresh()
             log.info("Fetched access token")

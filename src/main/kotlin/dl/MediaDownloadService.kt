@@ -10,6 +10,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.charset.Charset
@@ -28,9 +30,10 @@ import kotlin.time.minutes
 //     - We can't use the filesystem for this check because there's no way to distinguish between a non-motion photo and a motion
 //       photo whose video component hasn't downloaded yet.
 class MediaDownloadService(
-    private val getMediaItems: Channel<List<MediaItem>>,
+    private val getMediaItems: ReceiveChannel<List<MediaItem>>,
     private val prefix: String,
-    private val nonMotionPhotoCachePath: String
+    private val nonMotionPhotoCachePath: String,
+    private val sendMetric: SendChannel<Metric>
 ) {
     private val log = LoggerFactory.getLogger("MediaDownloadService")
     private val client = HttpClient(CIO) { expectSuccess = false }
@@ -71,22 +74,31 @@ class MediaDownloadService(
         val filename = if (url.contains("=dv")) "${item.id}.mp4" else "${item.id}.jpg"
         val file = dir.resolve(File(filename))
 
-        if (file.exists()) return
+        if (file.exists()) {
+            sendMetric.send(Metric.MEDIA_ITEM_SKIPPED_EXISTS)
+            return
+        }
+
         val response: HttpResponse = client.get(url)
 
         when {
             response.status == HttpStatusCode.OK -> {
                 val data = response.receive<ByteArray>()
+                sendMetric.send(Metric.MEDIA_ITEM_DL)
                 file.writeBytes(data)
             }
             response.status == HttpStatusCode.Unauthorized -> throw Error("Unauthorized!")
             response.status == HttpStatusCode.TooManyRequests -> {
+                sendMetric.send(Metric.RATE_LIMIT)
                 delayUntilMidnightPT()
                 downloadUrl(url, dir, item, retryCount + 1)
             }
             // We checked to see if a photo was also a motion photo, a 404 means the answer was NO
             response.status == HttpStatusCode.NotFound -> nonMotionPhotoCache.add(item.id)
-            response.status.value in (500..599) -> downloadUrl(url, dir, item, retryCount + 1)
+            response.status.value in (500..599) -> {
+                sendMetric.send(Metric.RETRY_5XX)
+                downloadUrl(url, dir, item, retryCount + 1)
+            }
             else -> throw Error("Unknown response code (${response.status.value}) when downloading a media item")
         }
     }
@@ -99,7 +111,10 @@ class MediaDownloadService(
 
         val urls = when {
             // Definitely a regular photo
-            nonMotionPhotoCache.contains(item.id) -> listOf("${item.baseUrl}=d")
+            nonMotionPhotoCache.contains(item.id) -> {
+                sendMetric.send(Metric.MOTION_PHOTO_CACHE_HIT)
+                listOf("${item.baseUrl}=d")
+            }
             // Photo or a motion photo
             item.metadata.photo != null -> listOf("${item.baseUrl}=d", "${item.baseUrl}=dv")
             // Definitely a video
@@ -112,6 +127,9 @@ class MediaDownloadService(
 
     @OptIn(ExperimentalTime::class)
     suspend fun start() = coroutineScope {
+
+        log.info("Starting media download service...")
+
         val mainLoop = launch {
             while (true) {
                 val items = getMediaItems.receive()
