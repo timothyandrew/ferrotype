@@ -10,21 +10,17 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import kotlin.time.ExperimentalTime
 
-const val downloadPath: String = "/tmp/ferrotype"
-const val cachePath: String = "/home/tim/ferrotype-db/non-motion-photos"
+// TODO: Read this from ENV
+const val downloadPath: String = "/data/ferrotype"
+const val cachePath: String = "/ferrotype-db/non-motion-photos"
 
 @ExperimentalTime
 fun main() = runBlocking<Unit> {
     val log = LoggerFactory.getLogger("mainLoop")
 
-    val env = dotenv() {
-        directory = System.getProperty("user.home")
-        filename = ".ferrotype"
-    }
-
-    val clientId = env["FERROTYPE_CLIENT_ID"] ?: throw Error("FERROTYPE_CLIENT_ID not set")
-    val clientSecret = env["FERROTYPE_CLIENT_SECRET"] ?: throw Error("FERROTYPE_CLIENT_SECRET not set")
-    val refreshToken = env["FERROTYPE_REFRESH_TOKEN"] ?: null
+    val clientId = System.getenv("FERROTYPE_CLIENT_ID") ?: throw Error("FERROTYPE_CLIENT_ID not set")
+    val clientSecret = System.getenv("FERROTYPE_CLIENT_SECRET") ?: throw Error("FERROTYPE_CLIENT_SECRET not set")
+    val refreshToken = System.getenv("FERROTYPE_REFRESH_TOKEN") ?: null
     val credentials = Credentials(clientId, clientSecret, refreshToken)
 
     val sendMetric = Channel<Metric>(1000)
@@ -32,6 +28,7 @@ fun main() = runBlocking<Unit> {
     val getMetadataPage = Channel<List<MediaItem>>()
 
     // TODO: Start subsequent runs at a given time of day
+    // TODO: Backoff when retrying
 
     coroutineScope {
         try {

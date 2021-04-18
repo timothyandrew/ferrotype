@@ -1,7 +1,9 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
+    application
     kotlin("jvm") version "1.4.32"
+    id("com.github.johnrengelman.shadow") version "5.0.0"
 }
 
 group = "dev.timothyandrew"
@@ -12,13 +14,10 @@ repositories {
 }
 
 dependencies {
-    implementation("com.google.photos.library:google-photos-library-client:1.6.1")
-    implementation("com.google.auth:google-auth-library-oauth2-http:0.25.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3")
     implementation("io.ktor:ktor-client-core:1.5.3")
     implementation("io.ktor:ktor-client-cio:1.5.3")
     implementation("io.ktor:ktor-client-gson:1.5.3")
-    implementation("io.github.cdimascio:dotenv-kotlin:6.2.2")
     implementation("ch.qos.logback:logback-classic:1.2.3")
 
     testImplementation(kotlin("test-junit5"))
@@ -32,4 +31,8 @@ tasks.test {
 
 tasks.withType<KotlinCompile>() {
     kotlinOptions.jvmTarget = "11"
+}
+
+application {
+    mainClassName = "MainKt"
 }
