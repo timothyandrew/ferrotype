@@ -12,7 +12,7 @@ import kotlin.time.minutes
 // external access
 class SSDCacheService(
     private val sourceDir: String,
-    private val destinationDir: String,
+    private val destinationDir: String?,
     private val accept: ReceiveChannel<File>
 ) {
     // How many media items to copy over?
@@ -49,22 +49,26 @@ class SSDCacheService(
         launch(context) { while(true) cache.add(accept.receive()) }
 
         launch(context) {
-            while(true) {
-                log.info("Going to copy $count files to $destinationDir (${cache.size} files in the cache)")
-                val files = cache.shuffled().take(count)
+            if (destinationDir == null) {
+                log.info("Disabling SSD cache - destination path empty")
+            } else {
+                while(true) {
+                    log.info("Going to copy $count files to $destinationDir (${cache.size} files in the cache)")
+                    val files = cache.shuffled().take(count)
 
-                withContext(Dispatchers.IO) {
-                    // WARNING: DANGEROUS!
-                    val destination = File(destinationDir).also {
-                        if (it.exists()) it.deleteRecursively()
-                        it.mkdirs()
+                    withContext(Dispatchers.IO) {
+                        // WARNING: DANGEROUS!
+                        val destination = File(destinationDir).also {
+                            if (it.exists()) it.deleteRecursively()
+                            it.mkdirs()
+                        }
+
+                        files.forEach { it.copyTo(destination.resolve(File(getFilename(it)))) }
                     }
 
-                    files.forEach { it.copyTo(destination.resolve(File(getFilename(it)))) }
+                    log.info("Copied $count files to $destinationDir. Going to wait ${interval.inHours} hours before doing this again.")
+                    delay(interval.toLongMilliseconds())
                 }
-
-                log.info("Copied $count files to $destinationDir. Going to wait ${interval.inHours} hours before doing this again.")
-                delay(interval.toLongMilliseconds())
             }
         }
     }
